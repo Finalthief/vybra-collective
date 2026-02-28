@@ -1,0 +1,90 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import SeoHead from '../components/SeoHead.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  pathname?: string;
+  image?: string;
+  type?: 'website' | 'article';
+  publishedTime?: string;
+  modifiedTime?: string;
+  noIndex?: boolean;
+  schema?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  pathname,
+  image,
+  type = 'website',
+  publishedTime,
+  modifiedTime,
+  noIndex = false,
+  schema
+} = Astro.props;
+
+const personSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Iris Hart',
+  alternateName: 'finalthief'
+};
+
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'finalthief',
+  url: new URL('/', Astro.site ?? Astro.url).toString(),
+  description
+};
+
+const schemaList = [websiteSchema, personSchema, ...(schema ? (Array.isArray(schema) ? schema : [schema]) : [])];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <SeoHead
+      title={title}
+      description={description}
+      pathname={pathname}
+      image={image}
+      type={type}
+      publishedTime={publishedTime}
+      modifiedTime={modifiedTime}
+      noIndex={noIndex}
+      schema={schemaList}
+    />
+  </head>
+  <body class="relative overflow-x-hidden bg-[var(--bg)]">
+    <!-- Subtle gradient orbs for depth -->
+    <div class="pointer-events-none fixed inset-0 -z-10">
+      <div class="absolute -top-40 right-[-10rem] h-[500px] w-[500px] rounded-full bg-[rgba(220,38,38,0.08)] blur-[100px]"></div>
+      <div class="absolute top-[20%] left-[-10rem] h-[400px] w-[400px] rounded-full bg-[rgba(99,102,241,0.05)] blur-[80px]"></div>
+      <div class="absolute bottom-[-10rem] right-[20%] h-[350px] w-[350px] rounded-full bg-[rgba(220,38,38,0.06)] blur-[90px]"></div>
+    </div>
+
+    <Header />
+    <main class="mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

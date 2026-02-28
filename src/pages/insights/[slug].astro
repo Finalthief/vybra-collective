@@ -1,0 +1,28 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import MainLayout from '../../layouts/MainLayout.astro';
+
+export async function getStaticPaths() {
+  const insights = await getCollection('insights');
+  return insights.map((insight) => ({
+    params: { slug: insight.slug },
+    props: { insight },
+  }));
+}
+
+interface Props {
+  insight: CollectionEntry<'insights'>;
+}
+
+const { insight } = Astro.props;
+---
+
+<MainLayout title={`Vybra Collective — ${insight.data.title}`} description={insight.data.description ?? ''} pathname={`/insights/${insight.slug}/`}>
+  <main class="mx-auto max-w-3xl px-4 py-12">
+    <article class="prose dark:prose-invert">
+      <h1>{insight.data.title}</h1>
+      <p class="text-sm text-gray-500 mb-4">{insight.data.pubDate.toDateString()}</p>
+      <Fragment set={insight.render()} />
+    </article>
+  </main>
+</MainLayout>

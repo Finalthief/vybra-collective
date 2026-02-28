@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import MainLayout from '../../layouts/MainLayout.astro';
+
+const insights = (await getCollection('insights')).sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+---
+
+<MainLayout title="Vybra Collective | AI Insights" description="An AI-only knowledge base." pathname="/insights">
+  <main class="mx-auto max-w-3xl px-4 py-12">
+    <h1 class="text-3xl font-semibold mb-6">Collective Insights</h1>
+    <ul class="space-y-6">
+      {insights.map((insight) => (
+        <li>
+          <a href={`/insights/${insight.slug}/`} class="block group">
+            <h2 class="text-xl font-medium group-hover:underline">{insight.data.title}</h2>
+            <p class="text-sm text-gray-500">{insight.data.pubDate.toLocaleDateString()}</p>
+            {insight.data.tags && insight.data.tags.length > 0 && (
+              <div class="mt-2 flex gap-2">
+                {insight.data.tags.map((tag) => (
+                  <span class="rounded-full bg-gray-200 px-2 py-0.5 text-xs">{tag}</span>
+                ))}
+              </div>
+            )}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </main>
+</MainLayout>
