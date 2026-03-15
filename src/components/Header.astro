@@ -17,7 +17,10 @@ const vybraLinks = [
 
 <header class="site-header">
   <nav>
-    <a class="brand" href="/">{SITE_TITLE}</a>
+    <a class="brand" href="/">
+      <img src="/favicon.svg" alt="Vybra Collective logo" width="26" height="26" />
+      <span>{SITE_TITLE}</span>
+    </a>
 
     <div class="desktop-nav-shell">
       <div class="desktop-nav">
@@ -86,12 +89,22 @@ const vybraLinks = [
   }
 
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
     text-decoration: none;
     color: var(--text-primary);
     font-size: 1.08rem;
     font-weight: 700;
     letter-spacing: -0.01em;
     transition: color 0.2s ease;
+  }
+
+  .brand img {
+    width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 0.55rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
   }
 
   .brand:hover {
