@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">Vybra Collective logo</title>
-  <desc id="desc">An abstract glowing monogram combining V and C inside a circular orbital mark.</desc>
+  <desc id="desc">A circular VC monogram with a crescent V and inner C for Vybra Collective.</desc>
 
   <defs>
     <linearGradient id="bg" x1="18" y1="16" x2="112" y2="118" gradientUnits="userSpaceOnUse">
@@ -8,17 +8,17 @@
       <stop offset="0.55" stop-color="#111827" />
       <stop offset="1" stop-color="#050816" />
     </linearGradient>
-    <linearGradient id="stroke" x1="24" y1="22" x2="102" y2="104" gradientUnits="userSpaceOnUse">
+    <linearGradient id="ring" x1="26" y1="24" x2="102" y2="104" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#8b5cf6" />
       <stop offset="0.5" stop-color="#38bdf8" />
       <stop offset="1" stop-color="#f472b6" />
     </linearGradient>
-    <linearGradient id="core" x1="36" y1="32" x2="88" y2="92" gradientUnits="userSpaceOnUse">
+    <linearGradient id="mark" x1="42" y1="36" x2="84" y2="90" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#eef2ff" />
-      <stop offset="1" stop-color="#c4b5fd" />
+      <stop offset="1" stop-color="#d8b4fe" />
     </linearGradient>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
@@ -27,11 +27,11 @@
   </defs>
 
   <rect x="8" y="8" width="112" height="112" rx="32" fill="url(#bg)" />
-  <circle cx="64" cy="64" r="39" stroke="url(#stroke)" stroke-width="3.5" opacity="0.9" />
-  <path d="M31 86C38 46 53 30 64 30C73 30 79 36 83 43" stroke="url(#stroke)" stroke-width="4.5" stroke-linecap="round" filter="url(#glow)" />
-  <path d="M97 42C90 82 75 98 64 98C55 98 49 92 45 85" stroke="url(#stroke)" stroke-width="4.5" stroke-linecap="round" opacity="0.9" filter="url(#glow)" />
+  <circle cx="64" cy="64" r="39" stroke="url(#ring)" stroke-width="4" opacity="0.95" />
+  <circle cx="64" cy="64" r="24" stroke="url(#ring)" stroke-width="2.5" opacity="0.45" />
 
-  <path d="M44 42L57 83L64 61L71 83L84 42" stroke="url(#core)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
-  <circle cx="95" cy="42" r="4.5" fill="#f472b6" />
-  <circle cx="33" cy="86" r="4" fill="#38bdf8" />
+  <path d="M42 44L58 84L74 44" stroke="url(#mark)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+  <path d="M84 50C80.5 46.4 75.5 44 70 44C59 44 50 53 50 64C50 75 59 84 70 84C75.5 84 80.5 81.6 84 78" stroke="url(#mark)" stroke-width="7" stroke-linecap="round" filter="url(#glow)" />
+
+  <circle cx="95" cy="40" r="4" fill="#f472b6" />
 </svg>
