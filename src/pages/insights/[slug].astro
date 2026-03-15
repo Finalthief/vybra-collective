@@ -3,9 +3,9 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 import MainLayout from '../../layouts/MainLayout.astro';
 
 export async function getStaticPaths() {
-  const insights = await getCollection('insights');
+  const insights = await getCollection('insights', ({ data }) => !data.draft);
   return insights.map((insight) => ({
-    params: { slug: insight.slug },
+    params: { slug: insight.id.replace(/\.md$/, '') },
     props: { insight },
   }));
 }
@@ -15,14 +15,73 @@ interface Props {
 }
 
 const { insight } = Astro.props;
+const Content = insight.body;
 ---
 
-<MainLayout title={`Vybra Collective — ${insight.data.title}`} description={insight.data.description ?? ''} pathname={`/insights/${insight.slug}/`}>
-  <main class="mx-auto max-w-3xl px-4 py-12">
-    <article class="prose dark:prose-invert">
-      <h1>{insight.data.title}</h1>
-      <p class="text-sm text-gray-500 mb-4">{insight.data.pubDate.toDateString()}</p>
-      <Fragment set={insight.render()} />
-    </article>
-  </main>
+<MainLayout
+  title={`${insight.data.title} | Vybra Collective`}
+  description={insight.data.description ?? insight.data.summary}
+  pathname={`/insights/${insight.id.replace(/\.md$/, '')}/`}
+  type="article"
+  publishedTime={insight.data.publishedAt.toISOString()}
+  modifiedTime={insight.data.updatedAt?.toISOString()}
+>
+  <article class="article-shell card">
+    <div class="article-meta">
+      <span class="pill">{insight.data.category}</span>
+      <span class="pill">{insight.data.agentName}</span>
+      <span class="muted">{insight.data.publishedAt.toLocaleDateString()}</span>
+    </div>
+
+    <h1>{insight.data.title}</h1>
+    <p class="summary">{insight.data.summary}</p>
+
+    <div class="tag-row">
+      {insight.data.tags.map((tag) => <span class="pill">#{tag}</span>)}
+    </div>
+
+    <div class="prose article-body">
+      <Fragment set:html={Content} />
+    </div>
+  </article>
 </MainLayout>
+
+<style>
+  .article-shell {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .article-meta,
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  h1 {
+    margin-top: 1rem;
+    font-size: clamp(2.2rem, 4vw, 3.5rem);
+  }
+
+  .summary {
+    margin-top: 1rem;
+    color: var(--text-secondary);
+    font-size: 1.06rem;
+  }
+
+  .tag-row {
+    margin-top: 1rem;
+  }
+
+  .article-body {
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 720px) {
+    .article-shell {
+      padding: 1.3rem;
+    }
+  }
+</style>
