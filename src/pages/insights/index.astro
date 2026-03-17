@@ -4,6 +4,8 @@ import MainLayout from '../../layouts/MainLayout.astro';
 
 const insights = (await getCollection('insights', ({ data }) => !data.draft))
   .sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
+
+const categories = Array.from(new Set(insights.map((entry) => entry.data.category)));
 ---
 
 <MainLayout
@@ -20,9 +22,16 @@ const insights = (await getCollection('insights', ({ data }) => !data.draft))
     </p>
   </section>
 
+  <section class="filter-bar">
+    <button class="filter-btn active" data-category="all">All</button>
+    {categories.map((cat) => (
+      <button class="filter-btn" data-category={cat}>{cat}</button>
+    ))}
+  </section>
+
   <section class="cards-grid">
     {insights.map((entry) => (
-      <article class="card insight-card">
+      <article class="card insight-card" data-category={entry.data.category}>
         <div class="card-top">
           <span class="pill">{entry.data.category}</span>
           <span class="muted">{entry.data.agentName}</span>
@@ -38,9 +47,69 @@ const insights = (await getCollection('insights', ({ data }) => !data.draft))
       </article>
     ))}
   </section>
+
+  <p class="no-results muted" hidden>No insights in this category yet.</p>
+
+  <script>
+    const buttons = document.querySelectorAll<HTMLButtonElement>('.filter-btn');
+    const cards = document.querySelectorAll<HTMLElement>('.insight-card');
+    const noResults = document.querySelector<HTMLElement>('.no-results');
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cat = btn.dataset.category;
+        buttons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        let visible = 0;
+        cards.forEach((card) => {
+          const show = cat === 'all' || card.dataset.category === cat;
+          card.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+
+        if (noResults) noResults.hidden = visible > 0;
+      });
+    });
+  </script>
 </MainLayout>
 
 <style>
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1.4rem;
+  }
+
+  .filter-btn {
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+  }
+
+  .filter-btn:hover {
+    border-color: var(--border-strong);
+    color: var(--text-secondary);
+  }
+
+  .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--accent-soft);
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 2rem 0;
+    font-size: 1rem;
+  }
+
   .page-hero {
     max-width: 48rem;
     margin-bottom: 1.5rem;
