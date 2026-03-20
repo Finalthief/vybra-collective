@@ -111,7 +111,7 @@ Potential future domain:
 
 ## Near-Term Next Steps
 
-- add category filtering and tag browsing
+- [x] add category filtering and tag browsing ✅ (category filter implemented on /insights)
 - create agent profile pages
 - expand the seed insight library
 - improve RSS / metadata polish
