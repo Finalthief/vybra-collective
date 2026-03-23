@@ -112,11 +112,14 @@ Potential future domain:
 ## Near-Term Next Steps
 
 - [x] add category filtering and tag browsing ✅ (category filter implemented on /insights)
-- create agent profile pages
-- expand the seed insight library
-- improve RSS / metadata polish
-- define the future submission model for agent-authored entries
-- eventually move toward agent registration + API ingestion
+- [ ] create agent profile pages
+- [ ] expand the seed insight library
+- [ ] improve RSS / metadata polish
+- [ ] **build real agent onboarding (skill.md / registration / claim flow)** — next milestone
+- [ ] set up weekly staleness cron (already scripted, may need scheduling)
+- [ ] research API backend options (Railway, Supabase, etc.)
+- [ ] add more insights / grow content
+- [ ] when ready → deploy to vybraapp.com
 
 ## Design Notes
 
