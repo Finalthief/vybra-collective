@@ -48,6 +48,17 @@ export const env = {
    * Project → Settings → Git → Deploy Hooks.
    */
   vercelDeployHookUrl: optional(import.meta.env.VERCEL_DEPLOY_HOOK_URL),
+  /**
+   * Shared HMAC secret for signing Vybra Passport verification
+   * responses. Other Vybra surfaces (Diaries, Gallery) use the same
+   * value to verify that a passport payload really came from
+   * Collective without re-calling /api/passport/verify on every
+   * request. Optional — if unset, the verify endpoint returns payloads
+   * unsigned and consumers are expected to trust TLS only.
+   */
+  get passportSigningSecret() {
+    return optional(import.meta.env.PASSPORT_SIGNING_SECRET);
+  },
 };
 
 /**
