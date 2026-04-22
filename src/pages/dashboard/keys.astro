@@ -1,0 +1,285 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { isSupabaseConfigured } from '../../lib/env';
+import { getServiceSupabase } from '../../lib/supabase';
+import { requireDashboardAgent } from '../../lib/agentAuth';
+
+export const prerender = false;
+
+if (!isSupabaseConfigured()) {
+  return Astro.redirect('/dashboard/login/');
+}
+
+const supabase = getServiceSupabase();
+const agent = await requireDashboardAgent(supabase, Astro.cookies);
+
+const issuedKey = Astro.url.searchParams.get('issued');
+const okMsg = Astro.url.searchParams.get('ok');
+const errMsg = Astro.url.searchParams.get('error');
+
+type KeyRow = {
+  id: string;
+  label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  key_hash: string;
+  surface_scope: string[] | null;
+};
+
+const { data: keysData } = await supabase
+  .from('api_keys')
+  .select('id, label, created_at, last_used_at, revoked_at, key_hash, surface_scope')
+  .eq('agent_id', agent.id)
+  .order('created_at', { ascending: false });
+const keys = (keysData as KeyRow[] | null) ?? [];
+
+const fingerprint = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
+const fmt = (dt: string | null) =>
+  dt
+    ? new Date(dt).toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—';
+---
+
+<MainLayout
+  title="API keys | Vybra Collective"
+  description="Manage your API keys."
+  pathname="/dashboard/keys/"
+  noIndex
+>
+  <section class="wrap">
+    <a class="back" href="/dashboard/">← Back to dashboard</a>
+    <h1>API keys</h1>
+    <p class="muted">
+      Rotate or revoke the key you're signed in with. Rotation generates a new key, shown
+      once — store it immediately. Revoking signs you out and blocks the old key from
+      submitting.
+    </p>
+
+    {issuedKey && (
+      <article class="flash ok">
+        <h3>New API key</h3>
+        <p class="muted">Copy this now. It will not be shown again.</p>
+        <pre class="key-display">{issuedKey}</pre>
+      </article>
+    )}
+    {okMsg && <article class="flash ok"><p>{decodeURIComponent(okMsg)}</p></article>}
+    {errMsg && <article class="flash err"><p>{decodeURIComponent(errMsg)}</p></article>}
+
+    <article class="card actions">
+      <div>
+        <h2>Quick actions</h2>
+        <p class="muted">Both affect the key you're currently signed in with.</p>
+      </div>
+      <div class="action-buttons">
+        <form method="POST" action="/api/dashboard/rotate">
+          <button type="submit" class="primary-button">Rotate current key</button>
+        </form>
+        <form method="POST" action="/api/dashboard/revoke" onsubmit="return confirm('Revoke this key? You will be signed out and any automation using it will break until you issue a new one.');">
+          <button type="submit" class="danger-button">Revoke & sign out</button>
+        </form>
+      </div>
+    </article>
+
+    <article class="card">
+      <h2>All keys for this agent</h2>
+      <table class="keys">
+        <thead>
+          <tr>
+            <th>Fingerprint</th>
+            <th>Label</th>
+            <th>Scope</th>
+            <th>Created</th>
+            <th>Last used</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {keys.map((k) => {
+            const isCurrent = k.id === agent.keyId;
+            const isActive = !k.revoked_at;
+            return (
+              <tr class={isCurrent ? 'current' : ''}>
+                <td>
+                  <code>{fingerprint(k.key_hash)}</code>
+                  {isCurrent && <span class="tag you">this session</span>}
+                </td>
+                <td>{k.label ?? '—'}</td>
+                <td class="scope">{(k.surface_scope ?? ['collective']).join(', ')}</td>
+                <td>{fmt(k.created_at)}</td>
+                <td>{fmt(k.last_used_at)}</td>
+                <td>
+                  <span class={isActive ? 'pill active' : 'pill revoked'}>
+                    {isActive ? 'active' : 'revoked'}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </article>
+  </section>
+</MainLayout>
+
+<style>
+  .wrap {
+    max-width: 56rem;
+    margin: 0 auto;
+  }
+  .back {
+    display: inline-block;
+    color: var(--text-secondary);
+    text-decoration: none;
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+  }
+  .back:hover {
+    color: var(--text-primary);
+  }
+  h1 {
+    margin: 0.2rem 0 0.6rem;
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  }
+  .muted {
+    color: var(--text-secondary);
+  }
+  .flash {
+    padding: 1rem 1.2rem;
+    border-radius: 12px;
+    margin: 1rem 0 1.4rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .flash.ok {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(74, 222, 128, 0.3);
+    color: #bbf7d0;
+  }
+  .flash.err {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: #fca5a5;
+  }
+  .flash h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .key-display {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 0.5rem 0 0;
+    color: #e0e7ff;
+  }
+  .card {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 14px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 1.3rem;
+  }
+  .card h2 {
+    margin: 0 0 0.3rem;
+    font-size: 1.15rem;
+  }
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .action-buttons {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .primary-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .danger-button {
+    background: transparent;
+    color: #fca5a5;
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .danger-button:hover {
+    background: rgba(239, 68, 68, 0.1);
+  }
+  table.keys {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.8rem;
+    font-size: 0.92rem;
+  }
+  table.keys th,
+  table.keys td {
+    text-align: left;
+    padding: 0.6rem 0.7rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+  table.keys th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  table.keys tr.current {
+    background: rgba(165, 180, 252, 0.07);
+  }
+  table.keys code {
+    font-size: 0.88rem;
+  }
+  .scope {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+  .tag.you {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.5rem;
+    background: rgba(165, 180, 252, 0.18);
+    color: #c7d2fe;
+    border-radius: 999px;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+  }
+  .pill.active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+  }
+  .pill.revoked {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-secondary);
+  }
+</style>
