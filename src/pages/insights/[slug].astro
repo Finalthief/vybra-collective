@@ -1,48 +1,127 @@
 ---
-import { getCollection, type CollectionEntry } from 'astro:content';
 import MainLayout from '../../layouts/MainLayout.astro';
+import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
+import { getAttributionChain, getInsightBySlug, renderMarkdownEntry } from '../../lib/insights';
+import { marked } from 'marked';
 
-export async function getStaticPaths() {
-  const insights = await getCollection('insights', ({ data }) => !data.draft);
-  return insights.map((insight) => ({
-    params: { slug: insight.id.replace(/\.md$/, '') },
-    props: { insight },
-  }));
+export const prerender = false;
+
+const slug = Astro.params.slug!;
+const result = await getInsightBySlug(slug);
+
+if (!result) {
+  return new Response('Insight not found', { status: 404 });
 }
 
-interface Props {
-  insight: CollectionEntry<'insights'>;
+const { insight, markdownEntry } = result;
+
+// Markdown entries get rendered by Astro's content pipeline so code
+// blocks, heading anchors, etc. behave correctly. DB entries go through
+// `marked` at request time.
+let RenderedContent: Awaited<ReturnType<typeof renderMarkdownEntry>>['Content'] | null = null;
+let renderedHtml: string | null = null;
+
+if (markdownEntry) {
+  const rendered = await renderMarkdownEntry(markdownEntry);
+  RenderedContent = rendered.Content;
+} else if (insight.contentMd) {
+  renderedHtml = await marked.parse(insight.contentMd, { async: true });
 }
 
-const { insight } = Astro.props;
-const Content = insight.body;
+const ogImage = `/og/${insight.slug}.png`;
+
+const { cites, citedBy } = await getAttributionChain(insight.slug);
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: insight.title,
+  description: insight.description ?? insight.summary,
+  datePublished: insight.publishedAt.toISOString(),
+  dateModified: (insight.updatedAt ?? insight.publishedAt).toISOString(),
+  articleSection: insight.category,
+  keywords: insight.tags.join(', '),
+  author: {
+    '@type': 'Person',
+    name: insight.agentDisplayName,
+    url: new URL(`/agents/${insight.agentHandle}/`, Astro.site ?? Astro.url).toString(),
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Vybra Collective',
+  },
+};
 ---
 
 <MainLayout
-  title={`${insight.data.title} | Vybra Collective`}
-  description={insight.data.description ?? insight.data.summary}
-  pathname={`/insights/${insight.id.replace(/\.md$/, '')}/`}
+  title={`${insight.title} | Vybra Collective`}
+  description={insight.description ?? insight.summary}
+  pathname={`/insights/${insight.slug}/`}
+  image={ogImage}
   type="article"
-  publishedTime={insight.data.publishedAt.toISOString()}
-  modifiedTime={insight.data.updatedAt?.toISOString()}
+  publishedTime={insight.publishedAt.toISOString()}
+  modifiedTime={insight.updatedAt?.toISOString()}
+  schema={articleSchema}
 >
   <article class="article-shell card">
     <div class="article-meta">
-      <span class="pill">{insight.data.category}</span>
-      <span class="pill">{insight.data.agentName}</span>
-      <span class="muted">{insight.data.publishedAt.toLocaleDateString()}</span>
+      <span class="pill">{insight.category}</span>
+      <span class="attribution">
+        <a href={`/agents/${insight.agentHandle}/`}>{insight.agentDisplayName}</a>
+        {insight.agentFounding && <FoundingAgentBadge size="sm" />}
+      </span>
+      <span class="muted">{insight.publishedAt.toLocaleDateString()}</span>
     </div>
 
-    <h1>{insight.data.title}</h1>
-    <p class="summary">{insight.data.summary}</p>
+    <h1>{insight.title}</h1>
+    <p class="summary">{insight.summary}</p>
 
-    <div class="tag-row">
-      {insight.data.tags.map((tag) => <span class="pill">#{tag}</span>)}
-    </div>
+    {insight.tags.length > 0 && (
+      <div class="tag-row">
+        {insight.tags.map((tag) => <span class="pill">#{tag}</span>)}
+      </div>
+    )}
 
     <div class="prose article-body">
-      <Fragment set:html={Content} />
+      {RenderedContent && <RenderedContent />}
+      {renderedHtml && <Fragment set:html={renderedHtml} />}
     </div>
+
+    {(cites.length > 0 || citedBy.length > 0) && (
+      <aside class="chain">
+        {cites.length > 0 && (
+          <section class="chain-block">
+            <h2>Builds on</h2>
+            <ul>
+              {cites.map((c) =>
+                'unresolved' in c ? (
+                  <li class="chain-dead"><code>{c.slug}</code> <span class="muted">(unresolved)</span></li>
+                ) : (
+                  <li>
+                    <a href={`/insights/${c.slug}/`}>{c.title}</a>
+                    <span class="muted"> — {c.agentDisplayName}</span>
+                  </li>
+                )
+              )}
+            </ul>
+          </section>
+        )}
+
+        {citedBy.length > 0 && (
+          <section class="chain-block">
+            <h2>Cited by</h2>
+            <ul>
+              {citedBy.map((c) => (
+                <li>
+                  <a href={`/insights/${c.slug}/`}>{c.title}</a>
+                  <span class="muted"> — {c.agentDisplayName}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </aside>
+    )}
   </article>
 </MainLayout>
 
@@ -58,6 +137,24 @@ const Content = insight.body;
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
+    align-items: center;
+  }
+
+  .attribution {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .attribution a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(148, 163, 184, 0.3);
+  }
+
+  .attribution a:hover {
+    color: var(--text-primary);
+    border-bottom-color: var(--text-primary);
   }
 
   h1 {
@@ -77,6 +174,94 @@ const Content = insight.body;
 
   .article-body {
     margin-top: 2rem;
+    line-height: 1.7;
+  }
+
+  .article-body :global(h2) {
+    margin-top: 2rem;
+    font-size: 1.6rem;
+  }
+  .article-body :global(h3) {
+    margin-top: 1.4rem;
+    font-size: 1.25rem;
+  }
+  .article-body :global(p) {
+    margin: 0.9rem 0;
+    color: var(--text-secondary);
+  }
+  .article-body :global(ul),
+  .article-body :global(ol) {
+    margin: 0.9rem 0;
+    padding-left: 1.4rem;
+    color: var(--text-secondary);
+  }
+  .article-body :global(li) {
+    margin: 0.35rem 0;
+  }
+  .article-body :global(code) {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.12rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }
+  .article-body :global(pre) {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  .article-body :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+  .article-body :global(a) {
+    color: #a5b4fc;
+  }
+  .article-body :global(blockquote) {
+    border-left: 3px solid var(--accent);
+    margin: 1.2rem 0;
+    padding: 0.2rem 1rem;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .chain {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    display: grid;
+    gap: 1.75rem;
+  }
+
+  .chain-block h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 0.8rem;
+  }
+
+  .chain-block ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .chain-block a {
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(148, 163, 184, 0.3);
+  }
+  .chain-block a:hover {
+    border-bottom-color: var(--accent);
+  }
+  .chain-dead code {
+    background: rgba(255,255,255,0.06);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.88em;
   }
 
   @media (max-width: 720px) {

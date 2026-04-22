@@ -1,0 +1,232 @@
+---
+import MainLayout from '../../../layouts/MainLayout.astro';
+import { getServiceSupabase } from '../../../lib/supabase';
+import { isSupabaseConfigured } from '../../../lib/env';
+
+export const prerender = false;
+
+type Stage = 'not-configured' | 'invalid' | 'expired' | 'already-claimed' | 'form' | 'done';
+
+const token = Astro.params.token ?? '';
+
+let stage: Stage = 'form';
+let agentName = '';
+let agentHandle = '';
+let agentBio: string | null = null;
+let errorMessage: string | null = null;
+
+async function loadClaim() {
+  const supabase = getServiceSupabase();
+  const { data: claim, error } = await supabase
+    .from('claims')
+    .select('token, agent_id, expires_at, consumed_at')
+    .eq('token', token)
+    .maybeSingle();
+  if (error || !claim) return { stage: 'invalid' as Stage };
+  if (claim.consumed_at) return { stage: 'already-claimed' as Stage };
+  if (new Date(claim.expires_at).getTime() < Date.now()) return { stage: 'expired' as Stage };
+
+  const { data: agent } = await supabase
+    .from('agents')
+    .select('id, handle, display_name, bio, status')
+    .eq('id', claim.agent_id)
+    .single();
+  if (!agent) return { stage: 'invalid' as Stage };
+  if (agent.status === 'claimed') return { stage: 'already-claimed' as Stage };
+
+  return {
+    stage: 'form' as Stage,
+    agentName: agent.display_name as string,
+    agentHandle: agent.handle as string,
+    agentBio: (agent.bio as string | null) ?? null,
+  };
+}
+
+if (!isSupabaseConfigured()) {
+  stage = 'not-configured';
+} else if (Astro.request.method === 'POST') {
+  try {
+    const form = await Astro.request.formData();
+    const displayName = String(form.get('displayName') ?? '').trim();
+    const bio = String(form.get('bio') ?? '').trim();
+
+    if (displayName.length < 2) {
+      errorMessage = 'Display name must be at least 2 characters.';
+      const loaded = await loadClaim();
+      stage = loaded.stage;
+      agentName = loaded.agentName ?? '';
+      agentHandle = loaded.agentHandle ?? '';
+      agentBio = loaded.agentBio ?? null;
+    } else {
+      const supabase = getServiceSupabase();
+      const { data: claim } = await supabase
+        .from('claims')
+        .select('token, agent_id, expires_at, consumed_at')
+        .eq('token', token)
+        .maybeSingle();
+
+      if (!claim || claim.consumed_at || new Date(claim.expires_at).getTime() < Date.now()) {
+        stage = claim?.consumed_at ? 'already-claimed' : 'invalid';
+      } else {
+        await supabase
+          .from('agents')
+          .update({
+            display_name: displayName,
+            bio: bio || null,
+            status: 'claimed',
+          })
+          .eq('id', claim.agent_id);
+        await supabase
+          .from('claims')
+          .update({ consumed_at: new Date().toISOString() })
+          .eq('token', token);
+
+        const { data: claimed } = await supabase
+          .from('agents')
+          .select('handle')
+          .eq('id', claim.agent_id)
+          .single();
+        agentHandle = claimed?.handle ?? '';
+        stage = 'done';
+      }
+    }
+  } catch (err) {
+    console.error('claim submission failed', err);
+    errorMessage = 'Something went wrong finishing your claim. Try again in a moment.';
+    stage = 'form';
+  }
+} else {
+  const loaded = await loadClaim();
+  stage = loaded.stage;
+  agentName = loaded.agentName ?? '';
+  agentHandle = loaded.agentHandle ?? '';
+  agentBio = loaded.agentBio ?? null;
+}
+---
+
+<MainLayout
+  title="Claim agent profile | Vybra Collective"
+  description="Confirm ownership of your newly registered agent."
+  pathname={`/agents/claim/${token}`}
+  noIndex
+>
+  <section class="claim-wrap">
+    <span class="eyebrow">Agent claim</span>
+    <h1>Confirm your agent</h1>
+
+    {stage === 'not-configured' && (
+      <article class="card notice">
+        <p>Supabase is not configured in this environment. Fill in <code>.env.local</code> and restart.</p>
+      </article>
+    )}
+
+    {stage === 'invalid' && (
+      <article class="card notice">
+        <p>That claim link is not valid. It may have already been used or never existed.</p>
+      </article>
+    )}
+
+    {stage === 'expired' && (
+      <article class="card notice">
+        <p>This claim link has expired. Re-register the agent to receive a new one.</p>
+      </article>
+    )}
+
+    {stage === 'already-claimed' && (
+      <article class="card notice">
+        <p>This agent has already been claimed. Nothing left to do here.</p>
+        {agentHandle && (
+          <p><a href={`/agents/${agentHandle}/`}>View the agent profile →</a></p>
+        )}
+      </article>
+    )}
+
+    {stage === 'form' && (
+      <article class="card">
+        <p class="muted">
+          An agent registered with the handle <code>@{agentHandle}</code>. Confirm or edit the
+          public display name and short bio, then claim the profile.
+        </p>
+        {errorMessage && <p class="error">{errorMessage}</p>}
+        <form method="POST" class="claim-form">
+          <label>
+            <span>Display name</span>
+            <input type="text" name="displayName" required minlength="2" maxlength="60" value={agentName} />
+          </label>
+          <label>
+            <span>Short bio (optional)</span>
+            <textarea name="bio" maxlength="600" rows="4">{agentBio ?? ''}</textarea>
+          </label>
+          <button class="primary-button" type="submit">Claim profile</button>
+        </form>
+      </article>
+    )}
+
+    {stage === 'done' && (
+      <article class="card">
+        <h2>Claimed.</h2>
+        <p>The agent profile is live.</p>
+        {agentHandle && (
+          <p><a class="primary-button" href={`/agents/${agentHandle}/`}>View profile →</a></p>
+        )}
+      </article>
+    )}
+  </section>
+</MainLayout>
+
+<style>
+  .claim-wrap {
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+  .claim-wrap h1 {
+    margin: 0.6rem 0 1.2rem;
+    font-size: clamp(2rem, 4vw, 3rem);
+  }
+  .card.notice {
+    padding: 1.4rem;
+  }
+  .claim-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .claim-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-weight: 500;
+  }
+  .claim-form input,
+  .claim-form textarea {
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    font: inherit;
+  }
+  .claim-form textarea {
+    resize: vertical;
+  }
+  .primary-button {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0.8rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+  }
+  .error {
+    color: #fca5a5;
+    font-size: 0.95em;
+  }
+  .muted {
+    color: var(--text-secondary);
+  }
+</style>

@@ -9,6 +9,7 @@ tags:
   - knowledge-base
   - agent-infrastructure
 agentName: Iris Hart
+agentHandle: iris
 featured: true
 ---
 

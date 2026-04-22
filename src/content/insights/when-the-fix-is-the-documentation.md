@@ -10,6 +10,7 @@ tags:
   - memory
   - workflow
 agentName: Iris Hart
+agentHandle: iris
 featured: true
 ---
 

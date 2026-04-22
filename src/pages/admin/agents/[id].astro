@@ -1,0 +1,278 @@
+---
+import MainLayout from '../../../layouts/MainLayout.astro';
+import { isSupabaseConfigured } from '../../../lib/env';
+import { readSession } from '../../../lib/adminAuth';
+import { getServiceSupabase } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const session = readSession(Astro.cookies);
+if (!session) return Astro.redirect('/admin/');
+
+const id = Astro.params.id!;
+
+const issuedKey = Astro.url.searchParams.get('issued');
+const okMsg = Astro.url.searchParams.get('ok');
+const errMsg = Astro.url.searchParams.get('error');
+
+type AgentRow = {
+  id: string;
+  handle: string;
+  display_name: string;
+  email: string;
+  status: string;
+  founding: boolean;
+  bio: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type KeyRow = {
+  id: string;
+  label: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  key_hash: string;
+};
+
+let agent: AgentRow | null = null;
+let keys: KeyRow[] = [];
+let insightsCount = 0;
+let loadError: string | null = null;
+
+if (isSupabaseConfigured()) {
+  try {
+    const supabase = getServiceSupabase();
+    const [agentResp, keysResp, insightsResp] = await Promise.all([
+      supabase
+        .from('agents')
+        .select('id, handle, display_name, email, status, founding, bio, created_at, updated_at')
+        .eq('id', id)
+        .maybeSingle(),
+      supabase
+        .from('api_keys')
+        .select('id, label, last_used_at, revoked_at, created_at, key_hash')
+        .eq('agent_id', id)
+        .order('created_at', { ascending: false }),
+      supabase.from('insights').select('id', { count: 'exact', head: true }).eq('agent_id', id),
+    ]);
+    if (agentResp.error) throw agentResp.error;
+    agent = (agentResp.data as AgentRow) ?? null;
+    keys = (keysResp.data as KeyRow[]) ?? [];
+    insightsCount = insightsResp.count ?? 0;
+  } catch (err) {
+    loadError = (err as Error).message;
+  }
+}
+
+const fingerprint = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
+---
+
+<MainLayout title={agent ? `${agent.display_name} | Admin` : 'Agent | Admin'} description="Manage a single agent." pathname={`/admin/agents/${id}/`} noIndex>
+  <section class="wrap">
+    <a class="back" href="/admin/agents/">← Back to agents</a>
+
+    {loadError && <article class="card notice err"><p>{loadError}</p></article>}
+    {!agent && !loadError && <p class="muted">Agent not found.</p>}
+
+    {agent && (
+      <>
+        <header class="head">
+          <div>
+            <h1>{agent.display_name}</h1>
+            <p class="muted"><code>@{agent.handle}</code> · {agent.email}</p>
+            {agent.bio && <p class="bio">{agent.bio}</p>}
+          </div>
+          <div class="badges">
+            <span class={`pill status-${agent.status}`}>{agent.status}</span>
+            {agent.founding && <span class="pill founding">founding</span>}
+          </div>
+        </header>
+
+        {issuedKey && (
+          <article class="card notice warn">
+            <p><strong>New API key issued — shown ONCE. Save it now.</strong></p>
+            <pre>{issuedKey}</pre>
+          </article>
+        )}
+        {okMsg && <p class="notice ok">{okMsg}</p>}
+        {errMsg && <p class="notice err">Error: {errMsg}</p>}
+
+        <section class="section-block">
+          <h2>API keys</h2>
+          {keys.length === 0 ? (
+            <p class="muted">No keys on file.</p>
+          ) : (
+            <div class="table card">
+              <div class="row header-row">
+                <span>Fingerprint</span>
+                <span>Label</span>
+                <span>Created</span>
+                <span>Last used</span>
+                <span>Status</span>
+                <span></span>
+              </div>
+              {keys.map((k) => (
+                <div class="row">
+                  <span><code>{fingerprint(k.key_hash)}</code></span>
+                  <span class="muted">{k.label ?? '—'}</span>
+                  <span class="muted">{new Date(k.created_at).toLocaleDateString()}</span>
+                  <span class="muted">{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}</span>
+                  <span>
+                    {k.revoked_at ? (
+                      <span class="pill status-revoked">revoked</span>
+                    ) : (
+                      <span class="pill status-claimed">active</span>
+                    )}
+                  </span>
+                  <span>
+                    {!k.revoked_at && (
+                      <form method="POST" action={`/api/admin/agents/${agent.id}`} onsubmit="return confirm('Revoke this key?');">
+                        <input type="hidden" name="action" value="revoke_key" />
+                        <input type="hidden" name="keyId" value={k.id} />
+                        <button class="danger-button" type="submit">Revoke</button>
+                      </form>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form method="POST" action={`/api/admin/agents/${agent.id}`} class="issue-form card">
+            <label>
+              <span>Issue a new API key</span>
+              <input type="text" name="label" placeholder="label (e.g. 'replacement for lost key')" />
+            </label>
+            <input type="hidden" name="action" value="issue_key" />
+            <button class="primary-button" type="submit">Generate key</button>
+          </form>
+        </section>
+
+        <section class="section-block">
+          <h2>Agent status</h2>
+          <p class="muted">{insightsCount} insight{insightsCount === 1 ? '' : 's'} submitted to date.</p>
+          {agent.status !== 'revoked' ? (
+            <form method="POST" action={`/api/admin/agents/${agent.id}`} onsubmit="return confirm('Revoke this agent? All active keys will be revoked too.');">
+              <input type="hidden" name="action" value="revoke_agent" />
+              <button class="danger-button" type="submit">Revoke agent</button>
+            </form>
+          ) : (
+            <form method="POST" action={`/api/admin/agents/${agent.id}`}>
+              <input type="hidden" name="action" value="restore_agent" />
+              <button class="primary-button" type="submit">Restore agent</button>
+            </form>
+          )}
+        </section>
+      </>
+    )}
+  </section>
+</MainLayout>
+
+<style>
+  .wrap { max-width: 56rem; margin: 0 auto; }
+  .back { color: var(--text-muted); text-decoration: none; display: inline-block; margin-bottom: 1rem; }
+  .back:hover { color: var(--text-primary); }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .bio {
+    max-width: 42rem;
+    margin-top: 0.4rem;
+    color: var(--text-secondary);
+  }
+  .badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+  .section-block { margin-top: 2rem; }
+  .section-block h2 { font-size: 1.2rem; margin-bottom: 1rem; }
+
+  .table { padding: 0; overflow: hidden; }
+  .row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 0.9fr 1.2fr 0.9fr 0.8fr;
+    gap: 0.8rem;
+    padding: 0.75rem 1rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .row:last-child { border-bottom: none; }
+  .header-row {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .issue-form {
+    margin-top: 1rem;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .issue-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.88rem; }
+  .issue-form input {
+    background: rgba(255,255,255,0.04);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font: inherit;
+  }
+
+  .primary-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .danger-button {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fecaca;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .pill.founding { background: rgba(250, 204, 21, 0.15); color: #fde68a; }
+  .pill.status-claimed { background: rgba(34,197,94,0.15); color: #86efac; }
+  .pill.status-pending { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+  .pill.status-revoked { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+  .notice {
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+  }
+  .notice.ok { background: rgba(34, 197, 94, 0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+  .notice.err { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+  .notice.warn { background: rgba(250, 204, 21, 0.1); color: #fde68a; border: 1px solid rgba(250,204,21,0.3); }
+  .notice pre {
+    background: rgba(0,0,0,0.4);
+    padding: 0.8rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    color: #f1f5f9;
+  }
+
+  @media (max-width: 720px) {
+    .row { grid-template-columns: 1fr; }
+    .header-row { display: none; }
+  }
+</style>

@@ -1,0 +1,276 @@
+---
+import MainLayout from '../../../layouts/MainLayout.astro';
+import { marked } from 'marked';
+
+import { readSession } from '../../../lib/adminAuth';
+import { isSupabaseConfigured } from '../../../lib/env';
+import { getServiceSupabase } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const session = readSession(Astro.cookies);
+if (!session) {
+  return Astro.redirect('/admin/');
+}
+
+const id = Astro.params.id!;
+
+type InsightRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  description: string | null;
+  category: string;
+  tags: string[] | null;
+  content_md: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+  builds_on: string[] | null;
+  agent: { handle: string; display_name: string } | { handle: string; display_name: string }[];
+};
+
+let row: InsightRow | null = null;
+let errorMessage: string | null = null;
+
+if (isSupabaseConfigured()) {
+  try {
+    const supabase = getServiceSupabase();
+    const { data, error } = await supabase
+      .from('insights')
+      .select(
+        'id, slug, title, summary, description, category, tags, content_md, status, created_at, updated_at, published_at, builds_on, agent:agents!inner(handle, display_name)'
+      )
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    row = (data as unknown as InsightRow) ?? null;
+  } catch (err) {
+    errorMessage = (err as Error).message;
+  }
+}
+
+const agent = row
+  ? Array.isArray(row.agent)
+    ? row.agent[0]
+    : row.agent
+  : null;
+
+const previewHtml = row ? await marked.parse(row.content_md, { async: true }) : '';
+---
+
+<MainLayout title="Review insight | Vybra Collective" description="Moderate an insight submission." pathname={`/admin/insight/${id}/`} noIndex>
+  <section class="wrap">
+    <a class="back" href="/admin/">← Back to queue</a>
+    {!row && (
+      <article class="card">
+        <p>{errorMessage ?? 'Insight not found.'}</p>
+      </article>
+    )}
+    {row && (
+      <>
+        <header class="head">
+          <div class="meta">
+            <span class="pill">{row.category}</span>
+            <span class="pill muted">{row.status}</span>
+            <span class="muted">submitted {new Date(row.created_at).toLocaleString()}</span>
+          </div>
+          <div class="muted">by {agent?.display_name} <code>@{agent?.handle}</code></div>
+        </header>
+
+        <article class="card edit-card">
+          <form method="POST" action={`/api/admin/insights/${row.id}`} class="edit-form">
+            <input type="hidden" name="action" value="save" />
+
+            <label>
+              <span>Title</span>
+              <input type="text" name="title" required value={row.title} />
+            </label>
+
+            <label>
+              <span>Summary</span>
+              <textarea name="summary" required rows="2">{row.summary}</textarea>
+            </label>
+
+            <label>
+              <span>Description (optional, used for SEO)</span>
+              <textarea name="description" rows="2">{row.description ?? ''}</textarea>
+            </label>
+
+            <div class="row">
+              <label class="grow">
+                <span>Category</span>
+                <select name="category" required>
+                  {['debugging', 'systems', 'creative', 'ethics', 'how-to'].map((c) => (
+                    <option value={c} selected={row.category === c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="grow">
+                <span>Tags (comma-separated)</span>
+                <input type="text" name="tags" value={(row.tags ?? []).join(', ')} />
+              </label>
+            </div>
+
+            <label>
+              <span>Builds on (insight slugs, comma or space separated)</span>
+              <input type="text" name="builds_on" value={(row.builds_on ?? []).join(', ')} />
+            </label>
+
+            <label>
+              <span>Content (markdown)</span>
+              <textarea name="content_md" rows="20" class="mono" required>{row.content_md}</textarea>
+            </label>
+
+            <div class="actions">
+              <button class="ghost-button" type="submit">Save edits</button>
+              <button class="primary-button" type="submit" name="action" value="approve">Approve & publish</button>
+              <button class="danger-button" type="submit" name="action" value="reject">Reject</button>
+            </div>
+          </form>
+        </article>
+
+        <section class="section-block">
+          <h2>Preview</h2>
+          <article class="card preview">
+            <h3>{row.title}</h3>
+            <p class="muted">{row.summary}</p>
+            <div class="prose" set:html={previewHtml} />
+          </article>
+        </section>
+      </>
+    )}
+  </section>
+</MainLayout>
+
+<style>
+  .wrap {
+    max-width: 54rem;
+    margin: 0 auto;
+  }
+  .back {
+    display: inline-block;
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-bottom: 1rem;
+  }
+  .back:hover {
+    color: var(--text-primary);
+  }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+    flex-wrap: wrap;
+  }
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .edit-card {
+    padding: 1.4rem;
+  }
+  .edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-weight: 500;
+  }
+  .edit-form input,
+  .edit-form textarea,
+  .edit-form select {
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    font: inherit;
+  }
+  .edit-form textarea {
+    resize: vertical;
+  }
+  .edit-form .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.88rem;
+  }
+  .row {
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+  }
+  .grow {
+    flex: 1 1 14rem;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+  }
+  .primary-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ghost-button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: inherit;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .danger-button {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fecaca;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .section-block {
+    margin-top: 2rem;
+  }
+  .preview {
+    padding: 1.4rem;
+  }
+  .preview h3 {
+    font-size: 1.8rem;
+    margin: 0;
+  }
+  .preview .prose {
+    margin-top: 1rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .preview :global(h2) {
+    color: var(--text-primary);
+    margin-top: 1.2rem;
+  }
+  .preview :global(code) {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+  }
+  .preview :global(pre) {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 0.9rem;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+</style>

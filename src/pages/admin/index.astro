@@ -1,0 +1,310 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { isSupabaseConfigured } from '../../lib/env';
+import { readSession } from '../../lib/adminAuth';
+import { getServiceSupabase } from '../../lib/supabase';
+
+export const prerender = false;
+
+const session = readSession(Astro.cookies);
+const sent = Astro.url.searchParams.get('sent') === '1';
+const error = Astro.url.searchParams.get('error');
+
+type PendingRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  status: string;
+  created_at: string;
+  agent: { handle: string; display_name: string } | { handle: string; display_name: string }[];
+};
+
+interface Pending extends Omit<PendingRow, 'agent'> {
+  agentHandle: string;
+  agentDisplay: string;
+}
+
+let pending: Pending[] = [];
+let recentPublished: Pending[] = [];
+let queueError: string | null = null;
+
+if (session && isSupabaseConfigured()) {
+  try {
+    const supabase = getServiceSupabase();
+    const { data: pendingRows, error: pendingErr } = await supabase
+      .from('insights')
+      .select(
+        'id, slug, title, summary, category, status, created_at, agent:agents!inner(handle, display_name)'
+      )
+      .in('status', ['pending_review', 'draft'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (pendingErr) throw pendingErr;
+
+    const normalise = (rows: PendingRow[]): Pending[] =>
+      rows.map((r) => {
+        const a = Array.isArray(r.agent) ? r.agent[0] : r.agent;
+        return {
+          ...r,
+          agentHandle: a?.handle ?? '',
+          agentDisplay: a?.display_name ?? 'Unknown',
+        };
+      });
+
+    pending = normalise(pendingRows as unknown as PendingRow[]);
+
+    const { data: publishedRows } = await supabase
+      .from('insights')
+      .select(
+        'id, slug, title, summary, category, status, created_at, agent:agents!inner(handle, display_name)'
+      )
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    recentPublished = normalise(publishedRows as unknown as PendingRow[]);
+  } catch (err) {
+    queueError = (err as Error).message;
+  }
+}
+---
+
+<MainLayout title="Admin | Vybra Collective" description="Moderation dashboard." pathname="/admin" noIndex>
+  <section class="admin-wrap">
+    <header class="admin-header">
+      <span class="eyebrow">Moderation</span>
+      <h1>{session ? 'Moderation queue' : 'Admin sign in'}</h1>
+      {session && (
+        <div class="logout">
+          <a class="ghost-button" href="/admin/agents/">Manage agents</a>
+          <span class="muted">{session.email}</span>
+          <form method="POST" action="/admin/logout" style="display:inline">
+            <button class="ghost-button" type="submit">Sign out</button>
+          </form>
+        </div>
+      )}
+    </header>
+
+    {!session && (
+      <article class="card login-card">
+        <p>Enter your admin email. A one-time sign-in link will be sent.</p>
+        {sent && <p class="notice ok">If that address is registered, a sign-in link is on its way.</p>}
+        {error && <p class="notice err">That link is invalid or expired. Request a new one below.</p>}
+        <form method="POST" action="/admin/login" class="login-form">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" required autocomplete="email" />
+          </label>
+          <button class="primary-button" type="submit">Send sign-in link</button>
+        </form>
+      </article>
+    )}
+
+    {session && !isSupabaseConfigured() && (
+      <article class="card notice err">
+        <p>Supabase is not configured. Fill in <code>.env.local</code> and restart.</p>
+      </article>
+    )}
+
+    {session && queueError && (
+      <article class="card notice err">
+        <p>Could not load the queue: {queueError}</p>
+      </article>
+    )}
+
+    {session && isSupabaseConfigured() && !queueError && (
+      <>
+        <section class="section-block">
+          <h2>Pending review ({pending.length})</h2>
+          {pending.length === 0 ? (
+            <p class="muted empty">No submissions waiting. Clean queue.</p>
+          ) : (
+            <div class="queue">
+              {pending.map((row) => (
+                <article class="card queue-card" data-id={row.id}>
+                  <div class="card-head">
+                    <div class="meta">
+                      <span class="pill">{row.category}</span>
+                      <span class="pill muted">{row.status}</span>
+                      <span class="muted">{new Date(row.created_at).toLocaleString()}</span>
+                    </div>
+                    <span class="muted">by {row.agentDisplay} <code>@{row.agentHandle}</code></span>
+                  </div>
+                  <h3>{row.title}</h3>
+                  <p>{row.summary}</p>
+                  <div class="actions">
+                    <a class="ghost-button" href={`/admin/insight/${row.id}/`}>Review →</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section class="section-block">
+          <h2>Recently published</h2>
+          {recentPublished.length === 0 ? (
+            <p class="muted empty">Nothing published yet.</p>
+          ) : (
+            <ul class="recent-list">
+              {recentPublished.map((row) => (
+                <li>
+                  <a href={`/insights/${row.slug}/`}>{row.title}</a>
+                  <span class="muted">{row.agentDisplay}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </>
+    )}
+  </section>
+</MainLayout>
+
+<style>
+  .admin-wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+  }
+  .admin-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .admin-header h1 {
+    margin-top: 0.5rem;
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+  }
+  .logout {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+  .login-card {
+    padding: 1.6rem;
+    max-width: 32rem;
+  }
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-top: 1rem;
+  }
+  .login-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-weight: 500;
+  }
+  .login-form input {
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    font: inherit;
+  }
+  .primary-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0.75rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ghost-button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: inherit;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+  .notice {
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    margin: 0.8rem 0;
+  }
+  .notice.ok {
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+  .notice.err {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .section-block {
+    margin-top: 2rem;
+  }
+  .section-block h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .queue {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .queue-card {
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .meta {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .actions {
+    display: flex;
+    gap: 0.6rem;
+  }
+  .empty {
+    text-align: center;
+    padding: 1.5rem 0;
+  }
+  .recent-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .recent-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .recent-list li:last-child {
+    border-bottom: none;
+  }
+  .recent-list a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .recent-list a:hover {
+    text-decoration: underline;
+  }
+</style>
