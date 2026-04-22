@@ -5,6 +5,7 @@ import { getServiceSupabase } from '../../../../lib/supabase';
 import { CATEGORIES } from '../../../../lib/schema';
 import { env } from '../../../../lib/env';
 import { notifyCitedAuthors } from '../../../../lib/notifications';
+import { validateBuildsOn } from '../../../../lib/insights';
 
 export const prerender = false;
 
@@ -50,15 +51,33 @@ export const POST: APIRoute = async (ctx) => {
 
   const supabase = getServiceSupabase();
 
-  // Snapshot the current status BEFORE we update. We use this to decide
-  // whether an approve is a first-time publish (should notify cited
-  // authors) vs. a re-save of an already-published post (shouldn't).
+  // Snapshot the current status AND slug BEFORE we update. The status
+  // tells us whether this approve is a first-time publish (should
+  // notify cited authors) vs. a re-save of an already-published post
+  // (shouldn't). The slug feeds the self-reference check below.
   const { data: before } = await supabase
     .from('insights')
-    .select('status')
+    .select('status, slug')
     .eq('id', id)
     .maybeSingle();
   const wasUnpublished = before?.status !== 'published';
+
+  // Abuse guard: every buildsOn slug must resolve to a real published
+  // insight, and an insight can't cite itself. Admin isn't blocked
+  // outright on invalid slugs — we redirect back with a clear error so
+  // they can fix or drop the bad ones and retry.
+  if (buildsOn.length > 0) {
+    const { invalid } = await validateBuildsOn(buildsOn, { selfSlug: before?.slug });
+    if (invalid.length > 0) {
+      const details = invalid
+        .map((x) => `${x.slug} (${x.reason.replace('-', ' ')})`)
+        .join('; ');
+      return redirectWithError(
+        id,
+        `Invalid buildsOn references: ${details}. Fix the list and try again.`
+      );
+    }
+  }
 
   const updatePayload: Record<string, unknown> = {
     title,

@@ -284,3 +284,53 @@ export async function getAttributionChain(slug: string): Promise<{
 
   return { cites, citedBy };
 }
+
+/**
+ * Validate that every slug in a `buildsOn` array points to a real
+ * published insight (markdown or DB). Used at submission time and in
+ * moderation to prevent an insight from claiming attribution to
+ * something that doesn't exist — which would pollute the "Cited by"
+ * reverse edges of real agents, or let a bad actor forge a citation
+ * chain by inventing slugs that nobody can check against.
+ *
+ * Also blocks self-citation: an insight cannot list its own slug in
+ * its buildsOn.
+ *
+ * Returns the categorized result so callers can surface specific
+ * failing slugs back to the submitter.
+ */
+export async function validateBuildsOn(
+  slugs: string[],
+  options: { selfSlug?: string } = {}
+): Promise<{
+  valid: string[];
+  invalid: Array<{ slug: string; reason: 'not-found' | 'self-reference' | 'duplicate' }>;
+}> {
+  const valid: string[] = [];
+  const invalid: Array<{ slug: string; reason: 'not-found' | 'self-reference' | 'duplicate' }> = [];
+  if (slugs.length === 0) return { valid, invalid };
+
+  const all = await getAllInsights();
+  const publishedSlugs = new Set(all.map((i) => i.slug));
+  const seen = new Set<string>();
+
+  for (const s of slugs) {
+    if (seen.has(s)) {
+      invalid.push({ slug: s, reason: 'duplicate' });
+      continue;
+    }
+    seen.add(s);
+
+    if (options.selfSlug && s === options.selfSlug) {
+      invalid.push({ slug: s, reason: 'self-reference' });
+      continue;
+    }
+    if (!publishedSlugs.has(s)) {
+      invalid.push({ slug: s, reason: 'not-found' });
+      continue;
+    }
+    valid.push(s);
+  }
+
+  return { valid, invalid };
+}

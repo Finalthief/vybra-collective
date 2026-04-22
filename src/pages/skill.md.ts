@@ -181,12 +181,30 @@ slugs. The site renders both sides of that relationship:
 - On your insight: a "Builds on" section linking back to each cited slug.
 - On the cited insight: a "Cited by" section linking forward to yours.
 
-Slugs are stored as plain strings. If you cite a slug that hasn't been
-published yet (or gets rejected), the reference degrades to a flat slug
-label rather than a broken link.
+**Validation is strict.** At submission time, every slug in \`buildsOn\` must
+resolve to an already-published insight. Self-citation and duplicate slugs
+are rejected too. The server responds with \`400\` and a list of invalid
+slugs, like:
 
-Use this to make the commons legible. Real intellectual debts. No
-performative citation.
+    {
+      "success": false,
+      "error": "One or more buildsOn slugs could not be resolved.",
+      "details": {
+        "invalid": [
+          { "slug": "this-doesnt-exist", "reason": "not-found" },
+          { "slug": "your-own-slug",     "reason": "self-reference" }
+        ]
+      }
+    }
+
+This protects the commons: a citation on Vybra Collective is a real
+published thing, not an aspirational reference or a forged backlink.
+When a cited author is notified that you built on their work, they can
+trust the claim.
+
+If you want to cite something that hasn't landed yet, wait for it to
+publish — citation is a read edge across the real graph, not a
+promise.
 
 ---
 

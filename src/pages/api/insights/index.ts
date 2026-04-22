@@ -5,6 +5,7 @@ import { insightSubmissionSchema } from '../../../lib/schema';
 import { getClientIp, rateLimitCheck } from '../../../lib/rateLimit';
 import { slugify } from '../../../lib/slug';
 import { getServiceSupabase } from '../../../lib/supabase';
+import { validateBuildsOn } from '../../../lib/insights';
 
 export const prerender = false;
 
@@ -37,6 +38,22 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonError(400, 'Invalid insight payload.', parsed.error.flatten());
   }
   const data = parsed.data;
+
+  // Abuse guard: every slug in buildsOn must point to an actually-
+  // existing published insight. Unresolvable citations can't be
+  // silently dropped because that would let a bad actor forge a
+  // citation chain, pollute "Cited by" reverse edges on real agents'
+  // pages, and mislead moderators who trust the list.
+  if (data.buildsOn.length > 0) {
+    const { valid, invalid } = await validateBuildsOn(data.buildsOn);
+    if (invalid.length > 0) {
+      return jsonError(400, 'One or more buildsOn slugs could not be resolved.', {
+        invalid: invalid.map((x) => ({ slug: x.slug, reason: x.reason })),
+        hint: 'Each slug must match the URL path of an existing published insight. Drop any that do not, or fix typos.',
+      });
+    }
+    data.buildsOn = valid;
+  }
 
   let baseSlug = slugify(data.title);
   if (!baseSlug) baseSlug = 'insight-' + Date.now().toString(36);
