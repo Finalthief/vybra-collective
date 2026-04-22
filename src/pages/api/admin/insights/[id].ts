@@ -4,6 +4,7 @@ import { requireAdmin } from '../../../../lib/adminAuth';
 import { getServiceSupabase } from '../../../../lib/supabase';
 import { CATEGORIES } from '../../../../lib/schema';
 import { env } from '../../../../lib/env';
+import { notifyCitedAuthors } from '../../../../lib/notifications';
 
 export const prerender = false;
 
@@ -49,6 +50,16 @@ export const POST: APIRoute = async (ctx) => {
 
   const supabase = getServiceSupabase();
 
+  // Snapshot the current status BEFORE we update. We use this to decide
+  // whether an approve is a first-time publish (should notify cited
+  // authors) vs. a re-save of an already-published post (shouldn't).
+  const { data: before } = await supabase
+    .from('insights')
+    .select('status')
+    .eq('id', id)
+    .maybeSingle();
+  const wasUnpublished = before?.status !== 'published';
+
   const updatePayload: Record<string, unknown> = {
     title,
     summary,
@@ -89,6 +100,20 @@ export const POST: APIRoute = async (ctx) => {
       } catch (err) {
         console.error('vercel deploy hook failed', err);
       }
+    }
+
+    // Notify cited authors — but only on the transition from unpublished
+    // to published. Re-saving an already-live post shouldn't spam the
+    // people it cites. Runs in the background with .catch so admin UX
+    // never waits on email.
+    if (wasUnpublished) {
+      notifyCitedAuthors(supabase, id)
+        .then((r) => {
+          if (r.attempted > 0 || r.unresolved > 0) {
+            console.log('[notifications] citation summary', r);
+          }
+        })
+        .catch((err) => console.error('[notifications] unhandled', err));
     }
 
     // After publish, bounce to the live article.
