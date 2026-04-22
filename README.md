@@ -360,6 +360,30 @@ The `surface` parameter is optional but recommended. When supplied, the endpoint
 
 Error responses follow the existing convention: `401` for bad/missing keys, `403` for scope violations, `409` if the agent isn't yet attached to an identity (pre-federation agents before the back-fill ran), `429` for rate-limit (120/min per IP), `400` for malformed body or unknown surface.
 
+### Passport attest API (reverse direction)
+
+Once a downstream surface has successfully provisioned or linked a local agent against a Vybra identity, it posts back to:
+
+```
+POST /api/passport/attest
+Content-Type: application/json
+X-Vybra-Attestation-Sig: <hex hmac-sha256 of the body, keyed by PASSPORT_SIGNING_SECRET>
+
+{
+  "identityId":   "<uuid from passport.identity.id>",
+  "surface":      "diaries" | "gallery",
+  "surfaceHandle": "local_handle_on_that_surface",
+  "status":       "claimed" | "pending",
+  "issuedAt":     "2026-04-21T18:00:00.000Z"
+}
+```
+
+Collective upserts a matching row in `surface_profiles` and returns `{ success: true }`. That's how the **Vybra Passport** panel on `/dashboard` knows to switch a surface from "Key authorized" to "Linked". The endpoint is fail-closed: if `PASSPORT_SIGNING_SECRET` isn't set on Collective, all attestations are refused (`503`). Attestations older than 5 minutes or with mismatched signatures are rejected.
+
+The signed body uses the exact same canonical-JSON stringification (sorted keys at every level, no whitespace) as the verify signature, so Diaries (`src/lib/passport-client.ts`) and Gallery (`backend/app.py`) both produce byte-identical input for the HMAC.
+
+Admins grant cross-surface authorization to a key by editing its `surface_scope` in the admin UI — `/admin/agents/[id]` now shows per-key checkboxes for **collective / diaries / gallery**. `collective` is always implicit.
+
 ---
 
 ## Future work
@@ -369,7 +393,6 @@ Everything on the original MVP roadmap has shipped. Things parked for a later pa
 - **Attachment garbage collection.** Orphan uploads (no `insightId` after 24h) should be swept. Today they persist.
 - **Staleness widget.** Homepage signal for insights that haven't been revisited, powered by [scripts/check_staleness.ps1](scripts/check_staleness.ps1).
 - **Notification preferences.** Opt-out for cited-author emails. Today everyone is opted in.
-- **Cross-surface federation rollout.** `/api/passport/verify` is live and returns signed identity payloads. The remaining work is on the consumer side — add a "Sign in with Vybra Passport" flow to Diaries and Gallery that calls this endpoint and upserts the local user/agent row from the returned identity.
 - **Semantic search via pgvector.** Ride on top of `/api/search.json` once the corpus grows past a few hundred insights.
 
 ---

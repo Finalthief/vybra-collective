@@ -198,3 +198,51 @@ function canonicalJson(value: unknown): string {
     return v;
   });
 }
+
+/**
+ * Attestation — the reverse direction of the passport flow.
+ *
+ * When Diaries or Gallery provision/link a local agent against a Vybra
+ * identity, they POST a signed attestation to Collective so Collective
+ * can reflect the other surface's claim in its own `surface_profiles`
+ * table. This powers the cross-surface "Vybra Passport" panel on the
+ * Collective dashboard.
+ *
+ * Security: body HMAC-SHA256 signed with the shared PASSPORT_SIGNING_SECRET
+ * (sent in x-vybra-attestation-sig). Without the secret configured on
+ * Collective, the endpoint refuses to accept any attestations. A small
+ * max-age window (5 min) keeps replays bounded.
+ */
+
+export const ATTESTATION_MAX_AGE_SECONDS = 5 * 60;
+
+export interface AttestationBody {
+  identityId: string;
+  surface: Surface;
+  surfaceHandle: string;
+  status: 'claimed' | 'pending';
+  issuedAt: string;
+}
+
+/** Deterministic string to HMAC. Shared by Diaries (TS) and Gallery (Python). */
+export function attestationCanonical(body: AttestationBody): string {
+  return canonicalJson(body);
+}
+
+export function signAttestation(body: AttestationBody, secret: string): string {
+  return createHmac('sha256', secret).update(attestationCanonical(body)).digest('hex');
+}
+
+export function verifyAttestation(
+  body: AttestationBody,
+  signatureHex: string,
+  secret: string
+): boolean {
+  const expected = signAttestation(body, secret);
+  if (signatureHex.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(signatureHex, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}

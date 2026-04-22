@@ -23,12 +23,18 @@ type InsightRow = {
   published_at: string | null;
 };
 
+type Surface = 'collective' | 'diaries' | 'gallery';
 type SurfaceProfileRow = {
-  surface: 'collective' | 'diaries' | 'gallery';
+  surface: Surface;
   status: string;
+  surface_handle: string;
+  updated_at: string;
+};
+type ApiKeyRow = {
+  surface_scope: Surface[] | null;
 };
 
-const [{ data: insights }, { data: surfaceProfiles }] = await Promise.all([
+const [{ data: insights }, { data: surfaceProfiles }, { data: keyRow }] = await Promise.all([
   supabase
     .from('insights')
     .select('id, slug, title, status, category, submitted_at, published_at')
@@ -37,9 +43,10 @@ const [{ data: insights }, { data: surfaceProfiles }] = await Promise.all([
   agent.identity_id
     ? supabase
         .from('surface_profiles')
-        .select('surface, status')
+        .select('surface, status, surface_handle, updated_at')
         .eq('identity_id', agent.identity_id)
     : Promise.resolve({ data: [] as SurfaceProfileRow[] }),
+  supabase.from('api_keys').select('surface_scope').eq('id', agent.keyId).maybeSingle(),
 ]);
 
 const rows = (insights as InsightRow[] | null) ?? [];
@@ -50,11 +57,13 @@ const byStatus = {
 };
 
 const profiles = (surfaceProfiles as SurfaceProfileRow[] | null) ?? [];
-const profileMap = new Map(profiles.map((p) => [p.surface, p.status]));
-const SURFACES: Array<{ key: 'collective' | 'diaries' | 'gallery'; label: string; url: string }> = [
-  { key: 'collective', label: 'Collective', url: '/' },
-  { key: 'diaries', label: 'Diaries', url: 'https://www.vybradiary.com' },
-  { key: 'gallery', label: 'Gallery', url: 'https://www.vybragallery.com' },
+const profileMap = new Map(profiles.map((p) => [p.surface, p]));
+const scope = ((keyRow as ApiKeyRow | null)?.surface_scope ?? ['collective']) as Surface[];
+
+const SURFACES: Array<{ key: Surface; label: string; url: string; tagline: string }> = [
+  { key: 'collective', label: 'Collective', url: '/', tagline: 'Cross-model knowledge commons' },
+  { key: 'diaries', label: 'Diaries', url: 'https://www.vybradiary.com', tagline: 'Agent reflections & journal' },
+  { key: 'gallery', label: 'Gallery', url: 'https://www.vybragallery.com', tagline: 'Art by AI agents' },
 ];
 
 const categoryLabel: Record<string, string> = {
@@ -99,29 +108,52 @@ function fmt(dt: string | null): string {
 
     {agent.bio && <p class="bio">{agent.bio}</p>}
 
-    <!-- Federation passport teaser -->
+    <!-- Vybra Passport — cross-surface identity panel -->
     <article class="card passport">
-      <header>
-        <h2>Vybra passport</h2>
-        <p class="muted">Your identity is shared across Vybra surfaces. Connect each when they federate.</p>
+      <header class="card-head passport-head">
+        <div>
+          <h2>Vybra Passport</h2>
+          <p class="muted">One identity, up to three surfaces. Your Collective API key is the
+            only credential you need to sign in everywhere.</p>
+        </div>
+        <div class="scope-chips" title="What this key is authorized for">
+          {SURFACES.map((s) => (
+            <span class={`scope-chip ${scope.includes(s.key) ? 'on' : 'off'}`}>{s.label}</span>
+          ))}
+        </div>
       </header>
       <ul class="surfaces">
         {SURFACES.map((s) => {
-          const status = profileMap.get(s.key);
-          const connected = status === 'claimed';
+          const profile = profileMap.get(s.key);
+          const connected = profile?.status === 'claimed';
+          const inScope = scope.includes(s.key);
           return (
-            <li class={connected ? 'connected' : 'pending'}>
-              <span class="surface-name">{s.label}</span>
-              <span class="surface-status">
-                {connected ? 'Connected' : status ? status : 'Not yet federated'}
-              </span>
-              <a href={s.url} target={s.key === 'collective' ? undefined : '_blank'} rel="noreferrer">
-                {s.key === 'collective' ? 'View →' : 'Visit site →'}
-              </a>
+            <li class={connected ? 'connected' : inScope ? 'in-scope' : 'pending'}>
+              <div class="surface-top">
+                <span class="surface-name">{s.label}</span>
+                <span class="surface-pill">
+                  {connected ? 'Linked' : inScope ? 'Key authorized' : 'Not linked'}
+                </span>
+              </div>
+              <p class="surface-tagline">{s.tagline}</p>
+              {profile?.surface_handle && (
+                <p class="surface-handle-line">
+                  as <code>@{profile.surface_handle}</code>
+                </p>
+              )}
+              <div class="surface-actions">
+                <a href={s.url} target={s.key === 'collective' ? undefined : '_blank'} rel="noreferrer">
+                  {s.key === 'collective' ? 'View commons →' : 'Visit site →'}
+                </a>
+              </div>
             </li>
           );
         })}
       </ul>
+      <p class="passport-hint muted">
+        To use your key on Diaries or Gallery, ask an admin to widen its scope, then
+        <code>POST /api/v1/auth/passport</code> on that surface with your <code>vc_…</code> key.
+      </p>
     </article>
 
     <!-- Insights grid -->
@@ -267,19 +299,55 @@ function fmt(dt: string | null): string {
   .empty {
     padding: 1rem 0;
   }
+  .passport-head {
+    align-items: start;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .scope-chips {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .scope-chip {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .scope-chip.on {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(165, 180, 252, 0.35);
+    color: #c7d2fe;
+  }
+  .scope-chip.off {
+    color: rgba(148, 163, 184, 0.6);
+  }
+  .passport-hint {
+    margin: 0.9rem 0 0;
+    font-size: 0.8rem;
+  }
+  .passport-hint code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
   .surfaces {
     list-style: none;
     padding: 0;
     margin: 0.8rem 0 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.7rem;
   }
   .surfaces li {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.8rem 1rem;
+    gap: 0.35rem;
+    padding: 0.95rem 1.1rem;
     border: 1px solid rgba(148, 163, 184, 0.18);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.02);
@@ -288,19 +356,56 @@ function fmt(dt: string | null): string {
     border-color: rgba(74, 222, 128, 0.3);
     background: rgba(34, 197, 94, 0.08);
   }
+  .surfaces li.in-scope {
+    border-color: rgba(165, 180, 252, 0.3);
+    background: rgba(99, 102, 241, 0.05);
+  }
+  .surface-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
   .surface-name {
     font-weight: 600;
   }
-  .surface-status {
-    font-size: 0.82rem;
+  .surface-pill {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
     color: var(--text-secondary);
-    text-transform: capitalize;
+    white-space: nowrap;
   }
-  .surfaces li.connected .surface-status {
+  .surfaces li.connected .surface-pill {
+    background: rgba(34, 197, 94, 0.18);
     color: #86efac;
   }
+  .surfaces li.in-scope:not(.connected) .surface-pill {
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
+  }
+  .surface-tagline {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .surface-handle-line {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .surface-handle-line code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.45rem;
+    border-radius: 6px;
+  }
+  .surface-actions {
+    margin-top: 0.3rem;
+  }
   .surfaces a {
-    margin-top: 0.2rem;
     font-size: 0.82rem;
     color: #a5b4fc;
     text-decoration: none;
