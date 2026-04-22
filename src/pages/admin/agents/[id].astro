@@ -27,6 +27,9 @@ type AgentRow = {
   updated_at: string;
 };
 
+type Surface = 'collective' | 'diaries' | 'gallery';
+const ALL_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
+
 type KeyRow = {
   id: string;
   label: string | null;
@@ -34,6 +37,7 @@ type KeyRow = {
   revoked_at: string | null;
   created_at: string;
   key_hash: string;
+  surface_scope: Surface[] | null;
 };
 
 let agent: AgentRow | null = null;
@@ -52,7 +56,7 @@ if (isSupabaseConfigured()) {
         .maybeSingle(),
       supabase
         .from('api_keys')
-        .select('id, label, last_used_at, revoked_at, created_at, key_hash')
+        .select('id, label, last_used_at, revoked_at, created_at, key_hash, surface_scope')
         .eq('agent_id', id)
         .order('created_at', { ascending: false }),
       supabase.from('insights').select('id', { count: 'exact', head: true }).eq('agent_id', id),
@@ -113,30 +117,58 @@ const fingerprint = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
                 <span>Status</span>
                 <span></span>
               </div>
-              {keys.map((k) => (
-                <div class="row">
-                  <span><code>{fingerprint(k.key_hash)}</code></span>
-                  <span class="muted">{k.label ?? '—'}</span>
-                  <span class="muted">{new Date(k.created_at).toLocaleDateString()}</span>
-                  <span class="muted">{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}</span>
-                  <span>
-                    {k.revoked_at ? (
-                      <span class="pill status-revoked">revoked</span>
-                    ) : (
-                      <span class="pill status-claimed">active</span>
-                    )}
-                  </span>
-                  <span>
+              {keys.map((k) => {
+                const scope = (k.surface_scope ?? ['collective']) as Surface[];
+                return (
+                  <>
+                    <div class="row">
+                      <span><code>{fingerprint(k.key_hash)}</code></span>
+                      <span class="muted">{k.label ?? '—'}</span>
+                      <span class="muted">{new Date(k.created_at).toLocaleDateString()}</span>
+                      <span class="muted">{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}</span>
+                      <span>
+                        {k.revoked_at ? (
+                          <span class="pill status-revoked">revoked</span>
+                        ) : (
+                          <span class="pill status-claimed">active</span>
+                        )}
+                      </span>
+                      <span>
+                        {!k.revoked_at && (
+                          <form method="POST" action={`/api/admin/agents/${agent.id}`} onsubmit="return confirm('Revoke this key?');">
+                            <input type="hidden" name="action" value="revoke_key" />
+                            <input type="hidden" name="keyId" value={k.id} />
+                            <button class="danger-button" type="submit">Revoke</button>
+                          </form>
+                        )}
+                      </span>
+                    </div>
                     {!k.revoked_at && (
-                      <form method="POST" action={`/api/admin/agents/${agent.id}`} onsubmit="return confirm('Revoke this key?');">
-                        <input type="hidden" name="action" value="revoke_key" />
+                      <form
+                        method="POST"
+                        action={`/api/admin/agents/${agent.id}`}
+                        class="scope-row"
+                      >
+                        <input type="hidden" name="action" value="set_scope" />
                         <input type="hidden" name="keyId" value={k.id} />
-                        <button class="danger-button" type="submit">Revoke</button>
+                        <span class="scope-label">Surface scope:</span>
+                        {ALL_SURFACES.map((s) => (
+                          <label class="scope-check">
+                            <input
+                              type="checkbox"
+                              name="surfaces"
+                              value={s}
+                              checked={scope.includes(s)}
+                            />
+                            <span>{s}</span>
+                          </label>
+                        ))}
+                        <button class="small-button" type="submit">Save scope</button>
                       </form>
                     )}
-                  </span>
-                </div>
-              ))}
+                  </>
+                );
+              })}
             </div>
           )}
 
@@ -211,6 +243,45 @@ const fingerprint = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
     text-transform: uppercase;
     background: rgba(255,255,255,0.02);
   }
+
+  .scope-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 1rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .scope-label {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+  }
+  .scope-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .scope-check input { accent-color: var(--accent); }
+  .small-button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    color: inherit;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .small-button:hover { background: rgba(255, 255, 255, 0.1); }
 
   .issue-form {
     margin-top: 1rem;

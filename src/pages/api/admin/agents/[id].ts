@@ -6,15 +6,21 @@ import { getServiceSupabase } from '../../../../lib/supabase';
 
 export const prerender = false;
 
+const VALID_SURFACES = ['collective', 'diaries', 'gallery'] as const;
+type Surface = (typeof VALID_SURFACES)[number];
+
 /**
  * Admin-side key management. Form-POST driven so the UI can use plain
  * <form> without JS.
  *
- *   action=revoke_key   keyId=<uuid>   — mark one key as revoked
- *   action=issue_key    label=<text>   — insert a fresh key for this agent
- *                                        (returned once via flash redirect
- *                                        param).
- *   action=revoke_agent                — revoke the agent (status = 'revoked')
+ *   action=revoke_key   keyId=<uuid>              — mark one key as revoked
+ *   action=issue_key    label=<text>              — insert a fresh key for this agent
+ *                                                   (returned once via flash redirect).
+ *   action=set_scope    keyId=<uuid> surfaces=... — update surface_scope on one key
+ *                                                   (checkboxes → array; always
+ *                                                   keeps at least `collective`).
+ *   action=revoke_agent                           — revoke the agent (status = 'revoked')
+ *   action=restore_agent                          — un-revoke (status = 'claimed')
  */
 export const POST: APIRoute = async (ctx) => {
   const session = requireAdmin(ctx);
@@ -58,6 +64,30 @@ export const POST: APIRoute = async (ctx) => {
         location: `/admin/agents/${agentId}/?issued=${encodeURIComponent(raw)}`,
       },
     });
+  }
+
+  if (action === 'set_scope') {
+    const keyId = String(form.get('keyId') ?? '');
+    if (!keyId) return redirect(agentId, 'keyId missing');
+
+    const raw = form.getAll('surfaces').map((v) => String(v));
+    const deduped = Array.from(new Set(raw)).filter((s): s is Surface =>
+      (VALID_SURFACES as readonly string[]).includes(s)
+    );
+    // Collective is always implicit — a Vybra Passport without the home
+    // surface makes no sense. Enforce that here so the column never goes
+    // empty.
+    const scope = deduped.includes('collective') ? deduped : ['collective', ...deduped];
+
+    const { error } = await supabase
+      .from('api_keys')
+      .update({ surface_scope: scope })
+      .eq('id', keyId)
+      .eq('agent_id', agentId);
+    if (error) return redirect(agentId, error.message);
+
+    await logModeration(supabase, session.email, `set_scope:${keyId}:${scope.join(',')}`, null);
+    return redirect(agentId, null, `Scope saved: ${scope.join(', ')}.`);
   }
 
   if (action === 'revoke_agent') {
