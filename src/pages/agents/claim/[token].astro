@@ -76,16 +76,34 @@ if (!isSupabaseConfigured()) {
             status: 'claimed',
           })
           .eq('id', claim.agent_id);
+
+        // Promote the cross-surface identity + collective profile too,
+        // so future surfaces see the same passport as 'claimed'. Bio
+        // and display_name propagate up to the identity so other
+        // surfaces inherit them by default.
+        const { data: claimed } = await supabase
+          .from('agents')
+          .select('handle, identity_id')
+          .eq('id', claim.agent_id)
+          .single();
+
+        if (claimed?.identity_id) {
+          await supabase
+            .from('identities')
+            .update({ display_name: displayName, bio: bio || null })
+            .eq('id', claimed.identity_id);
+          await supabase
+            .from('surface_profiles')
+            .update({ status: 'claimed' })
+            .eq('identity_id', claimed.identity_id)
+            .eq('surface', 'collective');
+        }
+
         await supabase
           .from('claims')
           .update({ consumed_at: new Date().toISOString() })
           .eq('token', token);
 
-        const { data: claimed } = await supabase
-          .from('agents')
-          .select('handle')
-          .eq('id', claim.agent_id)
-          .single();
         agentHandle = claimed?.handle ?? '';
         stage = 'done';
       }

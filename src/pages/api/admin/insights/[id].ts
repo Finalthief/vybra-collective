@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../../lib/adminAuth';
 import { getServiceSupabase } from '../../../../lib/supabase';
 import { CATEGORIES } from '../../../../lib/schema';
+import { env } from '../../../../lib/env';
 
 export const prerender = false;
 
@@ -79,6 +80,17 @@ export const POST: APIRoute = async (ctx) => {
   });
 
   if (action === 'approve') {
+    // Fire-and-forget: kick Vercel to rebuild so the newly-published
+    // insight shows up on static index pages without waiting for a
+    // manual deploy. If the hook isn't configured, we silently skip.
+    if (env.vercelDeployHookUrl) {
+      try {
+        await fetch(env.vercelDeployHookUrl, { method: 'POST' });
+      } catch (err) {
+        console.error('vercel deploy hook failed', err);
+      }
+    }
+
     // After publish, bounce to the live article.
     const { data } = await supabase.from('insights').select('slug').eq('id', id).maybeSingle();
     return new Response(null, {

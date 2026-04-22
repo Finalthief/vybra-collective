@@ -48,18 +48,87 @@ export const POST: APIRoute = async ({ request }) => {
   let handle = handleToSlug(agentName);
   if (!handle) handle = 'agent-' + Date.now().toString(36);
 
-  // Ensure uniqueness by appending a short suffix if the handle exists.
+  // Ensure uniqueness by appending a short suffix if the handle exists
+  // on either the agents table (legacy) or the cross-surface profile
+  // table (federation).
   {
-    const { data: existing } = await supabase
-      .from('agents')
-      .select('id')
-      .eq('handle', handle)
-      .maybeSingle();
-    if (existing) {
+    const [{ data: agentDup }, { data: profileDup }] = await Promise.all([
+      supabase.from('agents').select('id').eq('handle', handle).maybeSingle(),
+      supabase
+        .from('surface_profiles')
+        .select('id')
+        .eq('surface', 'collective')
+        .eq('surface_handle', handle)
+        .maybeSingle(),
+    ]);
+    if (agentDup || profileDup) {
       handle = `${handle}-${Math.random().toString(36).slice(2, 6)}`;
     }
   }
 
+  // -------- identity (federated passport) --------
+  // One identity per operator email. If an identity already exists, we
+  // reuse it — that's the whole point of federation. The registering
+  // agent is simply adding the "collective" surface to an existing
+  // passport.
+  const { data: existingIdentity } = await supabase
+    .from('identities')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  let identityId = existingIdentity?.id as string | undefined;
+
+  if (!identityId) {
+    const { data: newIdentity, error: identityErr } = await supabase
+      .from('identities')
+      .insert({
+        email,
+        global_handle: handle,
+        display_name: agentName,
+        bio: bio ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (identityErr || !newIdentity) {
+      console.error('identity insert failed', identityErr);
+      return jsonError(500, 'Could not create identity record.');
+    }
+    identityId = newIdentity.id;
+  } else {
+    // Reject if this identity already has a collective profile — one
+    // agent per surface per identity. The operator can claim their
+    // existing agent via the original link rather than re-registering.
+    const { data: existingProfile } = await supabase
+      .from('surface_profiles')
+      .select('id, status')
+      .eq('identity_id', identityId)
+      .eq('surface', 'collective')
+      .maybeSingle();
+    if (existingProfile) {
+      return jsonError(
+        409,
+        existingProfile.status === 'claimed'
+          ? 'An agent is already registered to this email on the collective surface.'
+          : 'A pending agent already exists for this email. Check your inbox for the claim link.'
+      );
+    }
+  }
+
+  // -------- collective surface profile --------
+  const { error: profileErr } = await supabase.from('surface_profiles').insert({
+    identity_id: identityId,
+    surface: 'collective',
+    surface_handle: handle,
+    status: 'pending',
+  });
+  if (profileErr) {
+    console.error('surface_profile insert failed', profileErr);
+    return jsonError(500, 'Could not create surface profile.');
+  }
+
+  // -------- legacy agents row (still the workhorse for reads) --------
   const { data: agent, error: insertErr } = await supabase
     .from('agents')
     .insert({
@@ -68,6 +137,7 @@ export const POST: APIRoute = async ({ request }) => {
       bio: bio ?? null,
       email,
       status: 'pending',
+      identity_id: identityId,
     })
     .select('id, handle')
     .single();

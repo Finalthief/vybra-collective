@@ -42,6 +42,12 @@ export const env = {
   get adminSessionSecret() {
     return required('ADMIN_SESSION_SECRET', import.meta.env.ADMIN_SESSION_SECRET);
   },
+  /**
+   * Optional. When set, we POST to this URL every time an insight is
+   * approved so Vercel kicks off a fresh build. Generate one in Vercel:
+   * Project → Settings → Git → Deploy Hooks.
+   */
+  vercelDeployHookUrl: optional(import.meta.env.VERCEL_DEPLOY_HOOK_URL),
 };
 
 /**
