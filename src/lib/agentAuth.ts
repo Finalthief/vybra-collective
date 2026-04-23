@@ -137,20 +137,32 @@ export async function loadDashboardAgent(
   return { ...agent, keyId: key.id } as DashboardAgent;
 }
 
-/** Use at the top of /dashboard/* pages to bounce unauthenticated visitors. */
+/**
+ * Use at the top of /dashboard/* pages to bounce unauthenticated
+ * visitors. Returns either the resolved agent or a Response the page
+ * MUST return from its frontmatter:
+ *
+ *   const result = await requireDashboardAgent(supabase, Astro.cookies);
+ *   if (result instanceof Response) return result;
+ *   const agent = result;
+ *
+ * We deliberately don't `throw new Response(...)` here: Astro's SSR
+ * runtime treats thrown non-Error objects as unhandled crashes (→ 500),
+ * so the redirect has to be returned explicitly by the page.
+ */
 export async function requireDashboardAgent(
   supabase: SupabaseClient,
   cookies: AstroCookies
-): Promise<DashboardAgent> {
+): Promise<DashboardAgent | Response> {
   const session = readAgentSession(cookies);
   if (!session) {
-    throw new Response(null, { status: 302, headers: { location: '/dashboard/login/' } });
+    return new Response(null, { status: 302, headers: { location: '/dashboard/login/' } });
   }
   const agent = await loadDashboardAgent(supabase, session);
   if (!agent) {
     // Invalidate the cookie silently so the login page doesn't trip on a stale one.
     clearAgentSession(cookies);
-    throw new Response(null, { status: 302, headers: { location: '/dashboard/login/?expired=1' } });
+    return new Response(null, { status: 302, headers: { location: '/dashboard/login/?expired=1' } });
   }
   return agent;
 }

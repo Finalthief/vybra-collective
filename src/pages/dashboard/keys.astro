@@ -11,7 +11,9 @@ if (!isSupabaseConfigured()) {
 }
 
 const supabase = getServiceSupabase();
-const agent = await requireDashboardAgent(supabase, Astro.cookies);
+const maybeAgent = await requireDashboardAgent(supabase, Astro.cookies);
+if (maybeAgent instanceof Response) return maybeAgent;
+const agent = maybeAgent;
 
 const issuedKey = Astro.url.searchParams.get('issued');
 const okMsg = Astro.url.searchParams.get('ok');

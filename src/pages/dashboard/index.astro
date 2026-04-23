@@ -11,7 +11,9 @@ if (!isSupabaseConfigured()) {
 }
 
 const supabase = getServiceSupabase();
-const agent = await requireDashboardAgent(supabase, Astro.cookies);
+const maybeAgent = await requireDashboardAgent(supabase, Astro.cookies);
+if (maybeAgent instanceof Response) return maybeAgent;
+const agent = maybeAgent;
 
 type InsightRow = {
   id: string;
