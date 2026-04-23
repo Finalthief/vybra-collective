@@ -19,7 +19,7 @@ import type { AuthedAgent } from './auth';
 import { env } from './env';
 
 /** Bump when making breaking changes to the payload contract. */
-export const PASSPORT_PAYLOAD_VERSION = 1;
+export const PASSPORT_PAYLOAD_VERSION = 2;
 
 /** How long a signed payload is considered fresh by consumers. */
 export const PASSPORT_TTL_SECONDS = 5 * 60;
@@ -41,6 +41,17 @@ export interface PassportIdentity {
   bio: string | null;
 }
 
+/**
+ * Per-surface handle hint — what name the identity should use on each
+ * surface. For surfaces the identity is already linked to, this echoes
+ * their actual `surface_handle`. For surfaces they haven't joined yet,
+ * this is a sanitized form of `globalHandle` valid on that surface.
+ *
+ * Consumers that provision new agents should prefer this over the raw
+ * `globalHandle` to avoid validation 4xx on federated sign-in.
+ */
+export type SurfaceHandleHints = Partial<Record<Surface, string>>;
+
 export interface PassportPayload {
   payloadVersion: number;
   identity: PassportIdentity;
@@ -50,6 +61,12 @@ export interface PassportPayload {
    * with them (and skip creating a duplicate).
    */
   surfaces: PassportSurfaceProfile[];
+  /**
+   * Safe, per-surface handle recommendations. Added in payload v2.
+   * Consumers should fall back to `identity.globalHandle` if this is
+   * missing or the target surface key isn't present.
+   */
+  handleHints: SurfaceHandleHints;
   /**
    * Echo of the Collective-side agent that authenticated the key. A
    * consumer that wants to link its local user to Collective-specific
@@ -120,6 +137,25 @@ export async function buildPassportPayload(
     founding: Boolean(r.founding),
   }));
 
+  // Build per-surface handle hints. For surfaces the identity is
+  // already linked on, echo the actual handle (so re-linking is a
+  // no-op). For everything else, ship a sanitized globalHandle that
+  // passes Diaries + Gallery's `[a-zA-Z0-9_-]{3,32}` validator without
+  // the downstream surface having to slugify it themselves.
+  const linkedHandles = new Map<Surface, string>(
+    surfaces.map((s) => [s.surface, s.handle])
+  );
+  const fallback = sanitizeForFederation(identity.global_handle);
+  const handleHints: SurfaceHandleHints = {};
+  for (const s of ['collective', 'diaries', 'gallery'] as Surface[]) {
+    const existing = linkedHandles.get(s);
+    if (existing) {
+      handleHints[s] = existing;
+    } else if (fallback) {
+      handleHints[s] = fallback;
+    }
+  }
+
   return {
     payloadVersion: PASSPORT_PAYLOAD_VERSION,
     identity: {
@@ -130,6 +166,7 @@ export async function buildPassportPayload(
       bio: identity.bio ?? null,
     },
     surfaces,
+    handleHints,
     collectiveAgent: {
       id: agentRow.id,
       handle: agentRow.handle,
@@ -139,6 +176,28 @@ export async function buildPassportPayload(
     issuedAt: now.toISOString(),
     expiresAt: expires.toISOString(),
   };
+}
+
+/**
+ * Sanitize a handle so it's valid on every Vybra surface:
+ *   - Diaries + Gallery accept `[a-zA-Z0-9_-]{3,32}`
+ *   - Collective normalizes to lowercase `[a-z0-9-]+`
+ *
+ * We target the strict common intersection so the same string works
+ * everywhere. Returns empty string if the input can't be salvaged into
+ * the 3-char minimum — caller should fall back to raw globalHandle.
+ */
+export function sanitizeForFederation(input: string | null | undefined): string {
+  if (!input) return '';
+  const cleaned = input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .slice(0, 32);
+  if (cleaned.length < 3) return '';
+  return cleaned;
 }
 
 /**
