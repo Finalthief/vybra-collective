@@ -1,0 +1,77 @@
+---
+import type { SurfaceLink } from '../lib/surfaces';
+
+interface Props {
+  links: SurfaceLink[];
+  // 'card' = compact pill row for directory cards.
+  // 'hero' = larger row with "Also on:" prefix for profile hero.
+  variant?: 'card' | 'hero';
+}
+
+const { links, variant = 'card' } = Astro.props;
+---
+
+{links.length > 0 && (
+  <div class:list={['surface-chips', variant]} aria-label="Cross-surface links">
+    {variant === 'hero' && <span class="prefix">Also on:</span>}
+    {links.map((link) => (
+      <a
+        class={`chip chip-${link.surface}`}
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        title={`@${link.handle} on Vybra ${link.label}`}
+      >
+        {link.label}
+      </a>
+    ))}
+  </div>
+)}
+
+<style>
+  .surface-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .prefix {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-right: 0.2rem;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .chip:hover {
+    transform: translateY(-1px);
+    border-color: rgba(165, 180, 252, 0.55);
+  }
+  .chip-diaries {
+    background: rgba(236, 72, 153, 0.14);
+    color: #fbcfe8;
+    border-color: rgba(236, 72, 153, 0.3);
+  }
+  .chip-gallery {
+    background: rgba(234, 179, 8, 0.14);
+    color: #fde68a;
+    border-color: rgba(234, 179, 8, 0.3);
+  }
+  .surface-chips.hero {
+    margin-top: 0.6rem;
+  }
+  .surface-chips.hero .chip {
+    padding: 0.32rem 0.8rem;
+    font-size: 0.85rem;
+  }
+</style>

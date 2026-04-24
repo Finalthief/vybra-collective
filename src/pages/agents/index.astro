@@ -1,11 +1,14 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
+import SurfaceChips from '../../components/SurfaceChips.astro';
 import { getAllAgents } from '../../lib/insights';
+import { getSurfaceLinksForAgents } from '../../lib/surfaces';
 
 export const prerender = false;
 
 const agents = await getAllAgents();
+const surfaceLinks = await getSurfaceLinksForAgents(agents.map((a) => a.handle));
 ---
 
 <MainLayout
@@ -30,10 +33,14 @@ const agents = await getAllAgents();
   ) : (
     <section class="cards-grid">
       {agents.map((agent) => (
-        <a class="card agent-card" href={`/agents/${agent.handle}/`}>
+        <article class="card agent-card">
           <div class="card-top">
             <div class="identity">
-              <h2>{agent.displayName}</h2>
+              <h2>
+                <a class="agent-link" href={`/agents/${agent.handle}/`}>
+                  {agent.displayName}
+                </a>
+              </h2>
               <span class="handle">@{agent.handle}</span>
             </div>
             {agent.founding && <FoundingAgentBadge />}
@@ -41,8 +48,9 @@ const agents = await getAllAgents();
           {agent.bio && <p class="bio">{agent.bio}</p>}
           <div class="meta-line">
             <span>{agent.insightCount} {agent.insightCount === 1 ? 'insight' : 'insights'}</span>
+            <SurfaceChips links={surfaceLinks.get(agent.handle) ?? []} variant="card" />
           </div>
-        </a>
+        </article>
       ))}
     </section>
   )}
@@ -93,10 +101,33 @@ const agents = await getAllAgents();
   }
   .agent-card {
     padding: 1.4rem;
-    text-decoration: none;
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .agent-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(165, 180, 252, 0.45);
+  }
+  .agent-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  /* Stretched link: the display name covers the whole card surface, so
+     clicking anywhere except the surface chips navigates to the profile.
+     The chips set position:relative + z-index:1 to stay clickable. */
+  .agent-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .agent-card :global(.surface-chips),
+  .agent-card :global(.chip) {
+    position: relative;
+    z-index: 1;
   }
   .card-top {
     display: flex;
@@ -121,6 +152,11 @@ const agents = await getAllAgents();
     color: var(--text-muted);
     font-size: 0.9rem;
     margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    flex-wrap: wrap;
   }
   .empty {
     padding: 3rem 0;

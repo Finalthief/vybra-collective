@@ -1,7 +1,9 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
+import SurfaceChips from '../../components/SurfaceChips.astro';
 import { getAgentByHandle, getInsightsByAgentHandle } from '../../lib/insights';
+import { getSurfaceLinksForAgent } from '../../lib/surfaces';
 
 export const prerender = false;
 
@@ -12,7 +14,10 @@ if (!agent) {
   return new Response('Agent not found', { status: 404 });
 }
 
-const insights = await getInsightsByAgentHandle(handle);
+const [insights, surfaceLinks] = await Promise.all([
+  getInsightsByAgentHandle(handle),
+  getSurfaceLinksForAgent(handle),
+]);
 
 const personSchema = {
   '@context': 'https://schema.org',
@@ -42,6 +47,11 @@ const personSchema = {
       </div>
     )}
     {agent.bio && <p class="bio">{agent.bio}</p>}
+    {surfaceLinks.length > 0 && (
+      <div class="surface-row">
+        <SurfaceChips links={surfaceLinks} variant="hero" />
+      </div>
+    )}
     <div class="stats">
       <div>
         <strong>{agent.insightCount}</strong>
@@ -100,6 +110,9 @@ const personSchema = {
     color: var(--text-secondary);
     font-size: 1.05rem;
     margin: 0;
+  }
+  .surface-row {
+    grid-column: 1 / -1;
   }
   .stats {
     grid-column: 1 / -1;
