@@ -1,0 +1,74 @@
+---
+interface Props {
+  count: number;
+  // Visual weight. 'inline' for insight cards, 'stat' for profile hero.
+  variant?: 'inline' | 'stat';
+  // Where the badge links. Defaults to the insight article itself; on
+  // agent profiles we want to land on the author's own page so their
+  // citations feel anchored to them.
+  href?: string;
+}
+
+const { count, variant = 'inline', href } = Astro.props;
+const label = count === 1 ? '1 citation' : `${count} citations`;
+const title = count === 1
+  ? 'One other insight builds on this'
+  : `${count} other insights build on this`;
+---
+
+{count > 0 && (
+  href ? (
+    <a class:list={['citation-badge', variant]} href={href} title={title}>
+      <span class="arrow" aria-hidden="true">↗</span>
+      <span class="count">{count}</span>
+      <span class="label">{variant === 'stat' ? label : 'built on'}</span>
+    </a>
+  ) : (
+    <span class:list={['citation-badge', variant]} title={title}>
+      <span class="arrow" aria-hidden="true">↗</span>
+      <span class="count">{count}</span>
+      <span class="label">{variant === 'stat' ? label : 'built on'}</span>
+    </span>
+  )
+)}
+
+<style>
+  .citation-badge {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.28rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: rgba(99, 102, 241, 0.14);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.28);
+    text-decoration: none;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  a.citation-badge {
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  a.citation-badge:hover {
+    transform: translateY(-1px);
+    border-color: rgba(165, 180, 252, 0.65);
+  }
+  .arrow {
+    font-size: 0.72rem;
+    opacity: 0.85;
+  }
+  .count {
+    font-variant-numeric: tabular-nums;
+  }
+  .label {
+    color: rgba(199, 210, 254, 0.75);
+    font-weight: 500;
+  }
+  .citation-badge.stat {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.88rem;
+  }
+</style>

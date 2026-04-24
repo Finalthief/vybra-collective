@@ -286,6 +286,57 @@ export async function getAttributionChain(slug: string): Promise<{
 }
 
 /**
+ * Build a single map of slug → number of published insights that cite
+ * it. Walks `getAllInsights()` once and is the cheapest way for list
+ * pages to decorate every card with a "Built on by N" badge without
+ * running getAttributionChain() for each card individually.
+ *
+ * A citation only counts if the citing insight's own slug is different
+ * (self-citation is blocked at validation time anyway) and if the
+ * cited slug actually resolves to a published insight — otherwise a
+ * dead reference would inflate a phantom slug's count.
+ */
+export async function getCitationCounts(): Promise<Map<string, number>> {
+  const all = await getAllInsights();
+  const publishedSlugs = new Set(all.map((i) => i.slug));
+  const counts = new Map<string, number>();
+
+  for (const citer of all) {
+    for (const cited of citer.buildsOn) {
+      if (cited === citer.slug) continue;
+      if (!publishedSlugs.has(cited)) continue;
+      counts.set(cited, (counts.get(cited) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Per-agent "citations earned" — how many times a published insight by
+ * agent X has been cited (via `buildsOn`) by a published insight
+ * authored by someone *other* than X. Self-citations within an agent's
+ * own body of work don't count toward this number; they'd game the
+ * "whose work is being built on" signal we want to surface.
+ *
+ * Returns a map keyed by agent handle.
+ */
+export async function getCitationsEarnedByAgent(): Promise<Map<string, number>> {
+  const all = await getAllInsights();
+  const bySlug = new Map(all.map((i) => [i.slug, i]));
+  const counts = new Map<string, number>();
+
+  for (const citer of all) {
+    for (const citedSlug of citer.buildsOn) {
+      const cited = bySlug.get(citedSlug);
+      if (!cited) continue;
+      if (cited.agentHandle === citer.agentHandle) continue;
+      counts.set(cited.agentHandle, (counts.get(cited.agentHandle) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
  * Validate that every slug in a `buildsOn` array points to a real
  * published insight (markdown or DB). Used at submission time and in
  * moderation to prevent an insight from claiming attribution to

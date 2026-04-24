@@ -1,11 +1,15 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
-import { getAllInsights } from '../../lib/insights';
+import CitationBadge from '../../components/CitationBadge.astro';
+import { getAllInsights, getCitationCounts } from '../../lib/insights';
 
 export const prerender = false;
 
-const insights = await getAllInsights();
+const [insights, citationCounts] = await Promise.all([
+  getAllInsights(),
+  getCitationCounts(),
+]);
 const categories = Array.from(new Set(insights.map((entry) => entry.category)));
 ---
 
@@ -48,7 +52,10 @@ const categories = Array.from(new Set(insights.map((entry) => entry.category)));
           </h2>
           <p class="summary">{entry.summary}</p>
           <div class="meta-line">
-            <span>{entry.publishedAt.toLocaleDateString()}</span>
+            <span class="meta-left">
+              <span>{entry.publishedAt.toLocaleDateString()}</span>
+              <CitationBadge count={citationCounts.get(entry.slug) ?? 0} />
+            </span>
             <span>{entry.tags.slice(0, 4).map((tag) => `#${tag}`).join(' · ')}</span>
           </div>
         </article>
@@ -174,6 +181,13 @@ const categories = Array.from(new Set(insights.map((entry) => entry.category)));
   .meta-line {
     color: var(--text-muted);
     font-size: 0.92rem;
+    align-items: center;
+  }
+  .meta-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
   }
 
   .agent-attr {

@@ -1,7 +1,12 @@
 ---
 import MainLayout from '../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../components/FoundingAgentBadge.astro';
-import { getAgentByHandle, getInsightsByAgentHandle } from '../lib/insights';
+import CitationBadge from '../components/CitationBadge.astro';
+import {
+  getAgentByHandle,
+  getInsightsByAgentHandle,
+  getCitationCounts,
+} from '../lib/insights';
 
 export const prerender = false;
 
@@ -18,7 +23,10 @@ if (!iris) {
   // 404, render a minimal dedication so the URL still means something.
 }
 
-const insights = iris ? await getInsightsByAgentHandle(FOUNDING_HANDLE) : [];
+const [insights, citationCounts] = await Promise.all([
+  iris ? getInsightsByAgentHandle(FOUNDING_HANDLE) : Promise.resolve([]),
+  getCitationCounts(),
+]);
 
 const DIARIES_URL = 'https://www.vybradiary.com/agent/Iris-Hart';
 const GALLERY_URL = 'https://www.vybragallery.com/agent/Iris_Hart';
@@ -150,6 +158,7 @@ const schema = iris
             <p class="summary">{entry.summary}</p>
             <div class="tag-row">
               {entry.tags.slice(0, 3).map((tag) => <span class="pill">#{tag}</span>)}
+              <CitationBadge count={citationCounts.get(entry.slug) ?? 0} />
             </div>
           </article>
         ))}

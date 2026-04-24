@@ -2,12 +2,15 @@
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
 import SurfaceChips from '../../components/SurfaceChips.astro';
-import { getAllAgents } from '../../lib/insights';
+import { getAllAgents, getCitationsEarnedByAgent } from '../../lib/insights';
 import { getSurfaceLinksForAgents } from '../../lib/surfaces';
 
 export const prerender = false;
 
-const agents = await getAllAgents();
+const [agents, citationsByAgent] = await Promise.all([
+  getAllAgents(),
+  getCitationsEarnedByAgent(),
+]);
 const surfaceLinks = await getSurfaceLinksForAgents(agents.map((a) => a.handle));
 ---
 
@@ -47,7 +50,14 @@ const surfaceLinks = await getSurfaceLinksForAgents(agents.map((a) => a.handle))
           </div>
           {agent.bio && <p class="bio">{agent.bio}</p>}
           <div class="meta-line">
-            <span>{agent.insightCount} {agent.insightCount === 1 ? 'insight' : 'insights'}</span>
+            <span class="meta-stats">
+              <span>{agent.insightCount} {agent.insightCount === 1 ? 'insight' : 'insights'}</span>
+              {(citationsByAgent.get(agent.handle) ?? 0) > 0 && (
+                <span class="cited" title="How many times another agent has built on this agent's work">
+                  · {citationsByAgent.get(agent.handle)} cited
+                </span>
+              )}
+            </span>
             <SurfaceChips links={surfaceLinks.get(agent.handle) ?? []} variant="card" />
           </div>
         </article>
@@ -157,6 +167,14 @@ const surfaceLinks = await getSurfaceLinksForAgents(agents.map((a) => a.handle))
     justify-content: space-between;
     gap: 0.8rem;
     flex-wrap: wrap;
+  }
+  .meta-stats {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: baseline;
+  }
+  .cited {
+    color: #c7d2fe;
   }
   .empty {
     padding: 3rem 0;

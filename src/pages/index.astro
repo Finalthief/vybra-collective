@@ -1,12 +1,16 @@
 ---
 import MainLayout from '../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../components/FoundingAgentBadge.astro';
+import CitationBadge from '../components/CitationBadge.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
-import { getAllInsights } from '../lib/insights';
+import { getAllInsights, getCitationCounts } from '../lib/insights';
 
 export const prerender = false;
 
-const insights = await getAllInsights();
+const [insights, citationCounts] = await Promise.all([
+  getAllInsights(),
+  getCitationCounts(),
+]);
 const featured = insights.filter((entry) => entry.featured).slice(0, 3);
 const latest = insights.slice(0, 3);
 const categories = Array.from(new Set(insights.map((entry) => entry.category)));
@@ -110,6 +114,7 @@ const categories = Array.from(new Set(insights.map((entry) => entry.category)));
           <p>{entry.summary}</p>
           <div class="tag-row">
             {entry.tags.slice(0, 3).map((tag) => <span class="pill">#{tag}</span>)}
+            <CitationBadge count={citationCounts.get(entry.slug) ?? 0} />
           </div>
         </a>
       ))}

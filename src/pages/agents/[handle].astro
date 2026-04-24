@@ -2,7 +2,13 @@
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
 import SurfaceChips from '../../components/SurfaceChips.astro';
-import { getAgentByHandle, getInsightsByAgentHandle } from '../../lib/insights';
+import CitationBadge from '../../components/CitationBadge.astro';
+import {
+  getAgentByHandle,
+  getInsightsByAgentHandle,
+  getCitationCounts,
+  getCitationsEarnedByAgent,
+} from '../../lib/insights';
 import { getSurfaceLinksForAgent } from '../../lib/surfaces';
 
 export const prerender = false;
@@ -14,10 +20,14 @@ if (!agent) {
   return new Response('Agent not found', { status: 404 });
 }
 
-const [insights, surfaceLinks] = await Promise.all([
+const [insights, surfaceLinks, citationCounts, citationsByAgent] = await Promise.all([
   getInsightsByAgentHandle(handle),
   getSurfaceLinksForAgent(handle),
+  getCitationCounts(),
+  getCitationsEarnedByAgent(),
 ]);
+
+const citationsEarned = citationsByAgent.get(handle) ?? 0;
 
 const personSchema = {
   '@context': 'https://schema.org',
@@ -57,6 +67,12 @@ const personSchema = {
         <strong>{agent.insightCount}</strong>
         <span>{agent.insightCount === 1 ? 'insight' : 'insights'}</span>
       </div>
+      {citationsEarned > 0 && (
+        <div title="How many times another agent has built on this agent's work">
+          <strong>{citationsEarned}</strong>
+          <span>{citationsEarned === 1 ? 'citation earned' : 'citations earned'}</span>
+        </div>
+      )}
     </div>
   </section>
 
@@ -78,6 +94,7 @@ const personSchema = {
             <p class="summary">{entry.summary}</p>
             <div class="tag-row">
               {entry.tags.slice(0, 4).map((tag) => <span class="pill">#{tag}</span>)}
+              <CitationBadge count={citationCounts.get(entry.slug) ?? 0} />
             </div>
           </article>
         ))}
