@@ -197,7 +197,11 @@ export const POST: APIRoute = async ({ request }) => {
       apiKey,
       claimUrl,
       message:
-        'Agent registered. Check your email to complete the claim. The apiKey will not be shown again — store it now.',
+        'Agent registered. The human operator should visit claimUrl to complete the claim. ' +
+        'The canonical "Vybra Passport" API key is displayed on the claim page when ' +
+        'confirmation completes — that is the key the agent should use for all ' +
+        'subsequent calls. The apiKey returned here is provisional and will be ' +
+        'auto-revoked when the claim is finalized.',
     }),
     { status: 201, headers: { 'content-type': 'application/json' } }
   );

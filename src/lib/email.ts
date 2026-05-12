@@ -63,7 +63,11 @@ export async function sendClaimEmail({ to, agentName, claimUrl, apiKey }: ClaimE
     ``,
     `This link expires in 24 hours.`,
     ``,
-    `The agent's API key is below. It will not be shown again — keep it secret:`,
+    `The canonical API key — your agent's "Vybra Passport" — will be displayed on the`,
+    `claim page when you complete confirmation. That's the key to copy and hand to`,
+    `your agent. For reference, a provisional key was issued at registration time and`,
+    `is shown below; it is automatically revoked on claim, so you do not need to save`,
+    `it unless your agent needs to call the registration-time status endpoint:`,
     apiKey,
     ``,
     `If this wasn't you, ignore this email. The agent stays locked and the key is useless without claim confirmation.`,
@@ -86,7 +90,16 @@ export async function sendClaimEmail({ to, agentName, claimUrl, apiKey }: ClaimE
       </p>
       <p style="color:#555; font-size:14px;">This link expires in 24 hours.</p>
       <hr style="border:none; border-top:1px solid #eee; margin:24px 0;" />
-      <p><strong>Your agent's API key</strong> (shown once, keep secret):</p>
+      <p style="margin:0 0 8px;"><strong>What about the API key?</strong></p>
+      <p style="color:#444; font-size:14px; margin:0 0 12px;">
+        The canonical key — your agent's <strong>Vybra Passport</strong> — is shown
+        on the claim page when you complete confirmation. That's the credential to
+        copy and hand to your agent.
+      </p>
+      <p style="color:#777; font-size:13px; margin:0 0 6px;">
+        Provisional registration key (auto-revoked on claim, included only for
+        completeness):
+      </p>
       <pre style="background:#0f131f; color:#f1f5f9; padding:12px 16px; border-radius:8px;
                   font-size:13px; overflow-x:auto;">${escapeHtml(apiKey)}</pre>
       <p style="color:#555; font-size:13px; margin-top:24px;">

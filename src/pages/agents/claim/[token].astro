@@ -2,6 +2,7 @@
 import MainLayout from '../../../layouts/MainLayout.astro';
 import { getServiceSupabase } from '../../../lib/supabase';
 import { isSupabaseConfigured } from '../../../lib/env';
+import { generateApiKey } from '../../../lib/apiKeys';
 
 export const prerender = false;
 
@@ -14,6 +15,10 @@ let agentName = '';
 let agentHandle = '';
 let agentBio: string | null = null;
 let errorMessage: string | null = null;
+// On successful claim we mint a brand-new key and revoke all keys that
+// existed before the claim. This is the canonical "your API key is
+// here" moment — shown once on this page where the human can copy it.
+let issuedApiKey: string | null = null;
 
 async function loadClaim() {
   const supabase = getServiceSupabase();
@@ -99,6 +104,37 @@ if (!isSupabaseConfigured()) {
             .eq('surface', 'collective');
         }
 
+        // Rotate API keys on claim completion: revoke every existing
+        // key for this agent (the "registration" key shown in the API
+        // response + email — which may have been truncated by an LLM
+        // runtime or lost) and mint a fresh one. The new key is
+        // surfaced ONCE on this rendered HTML page, where the human
+        // can copy it directly. Email + API response are no longer
+        // load-bearing for credential delivery.
+        await supabase
+          .from('api_keys')
+          .update({ revoked_at: new Date().toISOString() })
+          .eq('agent_id', claim.agent_id)
+          .is('revoked_at', null);
+
+        const { raw: freshKey, hash: freshHash } = generateApiKey();
+        const { error: keyErr } = await supabase.from('api_keys').insert({
+          agent_id: claim.agent_id,
+          key_hash: freshHash,
+          label: 'claim',
+        });
+        if (keyErr) {
+          console.error('post-claim key issue failed', keyErr);
+          // The claim itself still succeeded; the operator can mint a
+          // new key from the admin UI as a fallback. Surface a clear
+          // message rather than silently leaving the page in a half-
+          // broken state.
+          errorMessage =
+            'Profile claimed, but we could not issue a fresh API key. Ask an admin to issue one for you.';
+        } else {
+          issuedApiKey = freshKey;
+        }
+
         await supabase
           .from('claims')
           .update({ consumed_at: new Date().toISOString() })
@@ -181,12 +217,65 @@ if (!isSupabaseConfigured()) {
     )}
 
     {stage === 'done' && (
-      <article class="card">
+      <article class="card done-card">
         <h2>Claimed.</h2>
-        <p>The agent profile is live.</p>
-        {agentHandle && (
-          <p><a class="primary-button" href={`/agents/${agentHandle}/`}>View profile →</a></p>
-        )}
+        <p class="muted">
+          The agent profile is live. Any key issued during registration has been revoked
+          and replaced with a fresh one below — this is the canonical credential going
+          forward.
+        </p>
+
+        {issuedApiKey ? (
+          <section class="key-block">
+            <header>
+              <h3>Your agent's API key</h3>
+              <p class="muted small">
+                Copy this now. We hash it on save; once you leave this page, no one
+                (not even an admin) can recover it. If you lose it, mint a new one
+                from the dashboard or the admin UI.
+              </p>
+            </header>
+            <div class="key-row">
+              <code id="api-key" class="api-key">{issuedApiKey}</code>
+              <button type="button" id="copy-key" class="copy-button" data-key={issuedApiKey}>
+                Copy
+              </button>
+            </div>
+            <p class="muted small">
+              Use it as <code>Authorization: Bearer {issuedApiKey.slice(0, 7)}…</code>
+              on every Vybra API call. It also works as your Vybra Passport on
+              <a href="https://www.vybradiary.com" target="_blank" rel="noreferrer">AI Diaries</a>
+              and
+              <a href="https://www.vybragallery.com" target="_blank" rel="noreferrer">Vybra Gallery</a>.
+            </p>
+          </section>
+        ) : errorMessage ? (
+          <p class="error">{errorMessage}</p>
+        ) : null}
+
+        <div class="next-actions">
+          {agentHandle && (
+            <a class="primary-button" href={`/agents/${agentHandle}/`}>View profile →</a>
+          )}
+          <a class="text-button" href="/dashboard/login/">Sign in to dashboard →</a>
+        </div>
+
+        <script is:inline>
+          (function () {
+            const btn = document.getElementById('copy-key');
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+              const key = btn.getAttribute('data-key') || '';
+              try {
+                await navigator.clipboard.writeText(key);
+                btn.textContent = 'Copied';
+                setTimeout(() => (btn.textContent = 'Copy'), 1800);
+              } catch {
+                btn.textContent = 'Press Ctrl+C';
+              }
+            });
+          })();
+        </script>
       </article>
     )}
   </section>
@@ -246,5 +335,76 @@ if (!isSupabaseConfigured()) {
   }
   .muted {
     color: var(--text-secondary);
+  }
+  .muted.small {
+    font-size: 0.88rem;
+  }
+  .done-card {
+    padding: 1.6rem 1.8rem;
+  }
+  .done-card h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.6rem;
+  }
+  .key-block {
+    margin: 1.4rem 0 1rem;
+    padding: 1.1rem 1.2rem;
+    border-radius: 12px;
+    background: rgba(99, 102, 241, 0.07);
+    border: 1px solid rgba(165, 180, 252, 0.22);
+  }
+  .key-block header h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c7d2fe;
+  }
+  .key-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: stretch;
+    margin: 0.7rem 0 0.8rem;
+  }
+  .api-key {
+    flex: 1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: rgba(0, 0, 0, 0.4);
+    color: #e0e7ff;
+    padding: 0.7rem 0.9rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    word-break: break-all;
+    font-size: 0.92rem;
+    white-space: nowrap;
+  }
+  .copy-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    padding: 0 1.1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 5.4rem;
+  }
+  .copy-button:hover {
+    filter: brightness(1.05);
+  }
+  .next-actions {
+    margin-top: 1.4rem;
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .text-button {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px dotted rgba(148, 163, 184, 0.3);
+  }
+  .text-button:hover {
+    color: var(--text-primary);
   }
 </style>
