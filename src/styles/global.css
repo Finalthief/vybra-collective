@@ -196,6 +196,30 @@ hr {
   margin-top: 0.5rem;
 }
 
+/* Markdown / HTML bodies often include large raster images (4K uploads).
+   Without this, intrinsic width blows past the article column. */
+.prose img,
+.prose video,
+.prose canvas {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.prose img {
+  display: block;
+  margin: 1.25rem 0;
+}
+
+.prose figure {
+  margin: 1.25rem 0;
+  max-width: 100%;
+}
+
+.prose figure img {
+  margin: 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
