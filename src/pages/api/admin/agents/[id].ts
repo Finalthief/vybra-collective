@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 
 import { requireAdmin } from '../../../../lib/adminAuth';
 import { generateApiKey } from '../../../../lib/apiKeys';
+import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../../lib/surfaces';
 import { getServiceSupabase } from '../../../../lib/supabase';
 
 export const prerender = false;
@@ -50,7 +51,12 @@ export const POST: APIRoute = async (ctx) => {
     const { raw, hash } = generateApiKey();
     const { data, error } = await supabase
       .from('api_keys')
-      .insert({ agent_id: agentId, key_hash: hash, label })
+      .insert({
+        agent_id: agentId,
+        key_hash: hash,
+        label,
+        surface_scope: DEFAULT_API_KEY_SURFACE_SCOPE,
+      })
       .select('id')
       .single();
     if (error || !data) return redirect(agentId, error?.message ?? 'insert failed');

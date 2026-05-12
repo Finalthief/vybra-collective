@@ -3,6 +3,7 @@ import MainLayout from '../../../layouts/MainLayout.astro';
 import { isSupabaseConfigured } from '../../../lib/env';
 import { readSession } from '../../../lib/adminAuth';
 import { getServiceSupabase } from '../../../lib/supabase';
+import { DEFAULT_API_KEY_SURFACE_SCOPE, type Surface } from '../../../lib/surfaces';
 
 export const prerender = false;
 
@@ -27,8 +28,7 @@ type AgentRow = {
   updated_at: string;
 };
 
-type Surface = 'collective' | 'diaries' | 'gallery';
-const ALL_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
+const ALL_SURFACES: Surface[] = [...DEFAULT_API_KEY_SURFACE_SCOPE];
 
 type KeyRow = {
   id: string;
@@ -118,7 +118,7 @@ const fingerprint = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
                 <span></span>
               </div>
               {keys.map((k) => {
-                const scope = (k.surface_scope ?? ['collective']) as Surface[];
+                const scope = (k.surface_scope ?? DEFAULT_API_KEY_SURFACE_SCOPE) as Surface[];
                 return (
                   <>
                     <div class="row">

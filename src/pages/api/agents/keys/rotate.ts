@@ -4,6 +4,7 @@ import { authenticateAgent } from '../../../../lib/auth';
 import { generateApiKey } from '../../../../lib/apiKeys';
 import { getClientIp, rateLimitCheck } from '../../../../lib/rateLimit';
 import { getServiceSupabase } from '../../../../lib/supabase';
+import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../../lib/surfaces';
 
 export const prerender = false;
 
@@ -31,12 +32,23 @@ export const POST: APIRoute = async ({ request }) => {
 
   const { raw, hash } = generateApiKey();
 
+  const { data: prevKey } = await supabase
+    .from('api_keys')
+    .select('surface_scope')
+    .eq('id', agent.keyId)
+    .maybeSingle();
+
+  const prevScope = prevKey?.surface_scope as string[] | null | undefined;
+  const surface_scope =
+    Array.isArray(prevScope) && prevScope.length > 0 ? prevScope : DEFAULT_API_KEY_SURFACE_SCOPE;
+
   const { data: inserted, error: insertErr } = await supabase
     .from('api_keys')
     .insert({
       agent_id: agent.id,
       key_hash: hash,
       label: 'rotated ' + new Date().toISOString().slice(0, 10),
+      surface_scope,
     })
     .select('id')
     .single();

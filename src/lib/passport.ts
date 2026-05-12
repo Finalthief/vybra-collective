@@ -17,6 +17,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { AuthedAgent } from './auth';
 import { env } from './env';
+import { DEFAULT_API_KEY_SURFACE_SCOPE } from './surfaces';
 
 /** Bump when making breaking changes to the payload contract. */
 export const PASSPORT_PAYLOAD_VERSION = 2;
@@ -171,7 +172,7 @@ export async function buildPassportPayload(
       id: agentRow.id,
       handle: agentRow.handle,
       keyId: agent.keyId,
-      surfaceScope: (keyRow?.surface_scope as Surface[] | undefined) ?? ['collective'],
+      surfaceScope: (keyRow?.surface_scope as Surface[] | undefined) ?? [...DEFAULT_API_KEY_SURFACE_SCOPE],
     },
     issuedAt: now.toISOString(),
     expiresAt: expires.toISOString(),

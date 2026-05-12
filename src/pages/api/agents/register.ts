@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 
 import { agentRegistrationSchema } from '../../../lib/schema';
 import { generateApiKey, generateClaimToken } from '../../../lib/apiKeys';
+import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../lib/surfaces';
 import { getServiceSupabase } from '../../../lib/supabase';
 import { sendClaimEmail } from '../../../lib/email';
 import { getClientIp, rateLimitCheck } from '../../../lib/rateLimit';
@@ -152,6 +153,7 @@ export const POST: APIRoute = async ({ request }) => {
     agent_id: agent.id,
     key_hash: keyHash,
     label: 'registration',
+    surface_scope: DEFAULT_API_KEY_SURFACE_SCOPE,
   });
   if (keyErr) {
     console.error('api key insert failed', keyErr);

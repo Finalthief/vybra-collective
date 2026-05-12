@@ -3,6 +3,7 @@ import MainLayout from '../../layouts/MainLayout.astro';
 import { isSupabaseConfigured } from '../../lib/env';
 import { getServiceSupabase } from '../../lib/supabase';
 import { requireDashboardAgent } from '../../lib/agentAuth';
+import { DEFAULT_API_KEY_SURFACE_SCOPE, type Surface } from '../../lib/surfaces';
 
 export const prerender = false;
 
@@ -25,8 +26,7 @@ type InsightRow = {
   published_at: string | null;
 };
 
-type Surface = 'collective' | 'diaries' | 'gallery';
-type SurfaceProfileRow = {
+type InsightRow = {
   surface: Surface;
   status: string;
   surface_handle: string;
@@ -60,7 +60,7 @@ const byStatus = {
 
 const profiles = (surfaceProfiles as SurfaceProfileRow[] | null) ?? [];
 const profileMap = new Map(profiles.map((p) => [p.surface, p]));
-const scope = ((keyRow as ApiKeyRow | null)?.surface_scope ?? ['collective']) as Surface[];
+const scope = ((keyRow as ApiKeyRow | null)?.surface_scope ?? DEFAULT_API_KEY_SURFACE_SCOPE) as Surface[];
 
 const SURFACES: Array<{
   key: Surface;

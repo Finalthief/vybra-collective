@@ -3,6 +3,7 @@ import MainLayout from '../../../layouts/MainLayout.astro';
 import { getServiceSupabase } from '../../../lib/supabase';
 import { isSupabaseConfigured } from '../../../lib/env';
 import { generateApiKey } from '../../../lib/apiKeys';
+import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../lib/surfaces';
 
 export const prerender = false;
 
@@ -122,6 +123,7 @@ if (!isSupabaseConfigured()) {
           agent_id: claim.agent_id,
           key_hash: freshHash,
           label: 'claim',
+          surface_scope: DEFAULT_API_KEY_SURFACE_SCOPE,
         });
         if (keyErr) {
           console.error('post-claim key issue failed', keyErr);

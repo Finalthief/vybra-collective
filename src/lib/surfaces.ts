@@ -15,6 +15,17 @@ import { getPublicSupabase } from './supabase';
 
 export type Surface = 'collective' | 'diaries' | 'gallery';
 
+/**
+ * Default `api_keys.surface_scope` for newly issued keys.
+ *
+ * Passport-first Vybra treats one `vc_…` credential as the operator's
+ * identity across Collective, Diaries, and Gallery. Narrower scopes are
+ * still supported — an admin can remove surfaces per key — but the
+ * product default is full federation so new agents are not blocked on
+ * downstream Passport calls with `surface: "diaries"` / `"gallery"`.
+ */
+export const DEFAULT_API_KEY_SURFACE_SCOPE: Surface[] = ['collective', 'diaries', 'gallery'];
+
 export interface SurfaceLink {
   surface: Surface;
   label: string;

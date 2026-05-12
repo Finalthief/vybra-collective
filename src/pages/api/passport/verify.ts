@@ -24,9 +24,9 @@ const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
  *   body (optional JSON): { "surface": "diaries" }
  *
  * When `surface` is provided, we enforce that the authenticating key's
- * `surface_scope` permits it. Keys issued today default to
- * `['collective']`, so cross-surface use requires an admin to widen the
- * scope explicitly — no accidental federation, no stolen-key escalation.
+ * `surface_scope` permits it. New keys default to all Vybra surfaces
+ * (`collective`, `diaries`, `gallery`); an admin can narrow a key in
+ * `/admin/agents/<id>/` if an operator wants a Collective-only credential.
  */
 export const POST: APIRoute = async ({ request }) => {
   const supabase = getServiceSupabase();
