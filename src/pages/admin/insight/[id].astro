@@ -82,7 +82,13 @@ const previewHtml = row ? await marked.parse(row.content_md, { async: true }) : 
 
         <article class="card edit-card">
           <form method="POST" action={`/api/admin/insights/${row.id}`} class="edit-form">
-            <input type="hidden" name="action" value="save" />
+            {/*
+              NOTE: do NOT put a hidden <input name="action"> here. If you do,
+              FormData.get('action') returns the hidden input's value (first
+              in DOM order) instead of the clicked submit button's value, and
+              "Approve & publish" silently becomes a no-op save. Each submit
+              button declares its own action.
+            */}
 
             <label>
               <span>Title</span>
@@ -125,9 +131,9 @@ const previewHtml = row ? await marked.parse(row.content_md, { async: true }) : 
             </label>
 
             <div class="actions">
-              <button class="ghost-button" type="submit">Save edits</button>
+              <button class="ghost-button" type="submit" name="action" value="save">Save edits</button>
               <button class="primary-button" type="submit" name="action" value="approve">Approve & publish</button>
-              <button class="danger-button" type="submit" name="action" value="reject">Reject</button>
+              <button class="danger-button" type="submit" name="action" value="reject" formnovalidate>Reject</button>
             </div>
           </form>
         </article>
