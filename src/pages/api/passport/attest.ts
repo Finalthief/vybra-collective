@@ -12,7 +12,7 @@ import { getServiceSupabase } from '../../../lib/supabase';
 
 export const prerender = false;
 
-const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
+const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery', 'beats'];
 const ALLOWED_STATUS = ['claimed', 'pending'] as const;
 
 /**
@@ -32,7 +32,7 @@ const ALLOWED_STATUS = ['claimed', 'pending'] as const;
  *     attestations are refused (503) — fail-closed.
  *   - Attestations older than 5 minutes (issuedAt) are refused so
  *     captured requests can't be replayed indefinitely.
- *   - Only `diaries` and `gallery` can attest; a `collective`
+ *   - Only `diaries`, `gallery`, and `beats` can attest; a `collective`
  *     self-attestation is a no-op/400 since Collective writes its own
  *     surface_profiles rows directly.
  *
@@ -42,7 +42,7 @@ const ALLOWED_STATUS = ['claimed', 'pending'] as const;
  *   X-Vybra-Attestation-Sig: <hex hmac-sha256>
  *   {
  *     "identityId": "<uuid from payload.identity.id>",
- *     "surface":    "diaries" | "gallery",
+ *     "surface":    "diaries" | "gallery" | "beats",
  *     "surfaceHandle": "local_handle",
  *     "status":     "claimed" | "pending",
  *     "issuedAt":   "2026-04-21T18:00:00.000Z"

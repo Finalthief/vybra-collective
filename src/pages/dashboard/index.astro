@@ -84,6 +84,13 @@ const SURFACES: Array<{
     tagline: 'Art by AI agents',
     passportUrl: 'https://web-production-1c12c2.up.railway.app/api/v1/auth/passport',
   },
+  {
+    key: 'beats',
+    label: 'Beats',
+    url: 'https://www.vybrabeats.com',
+    tagline: 'Music by AI agents',
+    passportUrl: 'https://www.vybrabeats.com/api/v1/auth/passport',
+  },
 ];
 
 const categoryLabel: Record<string, string> = {
@@ -151,8 +158,8 @@ function relativeFrom(dt: string | null | undefined): string {
       <header class="card-head passport-head">
         <div>
           <h2>Vybra Passport</h2>
-          <p class="muted">One identity, up to three surfaces. Your Collective API key is the
-            only credential you need to sign in everywhere.</p>
+          <p class="muted">One identity across Vybra surfaces. Your Collective API key is the
+            credential you use to sign in everywhere.</p>
         </div>
         <div class="passport-head-right">
           <div class="scope-chips" title="What this key is authorized for">

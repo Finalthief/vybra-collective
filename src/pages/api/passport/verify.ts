@@ -7,7 +7,7 @@ import { getServiceSupabase } from '../../../lib/supabase';
 
 export const prerender = false;
 
-const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
+const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery', 'beats'];
 
 /**
  * Vybra Passport verification endpoint.
@@ -25,7 +25,7 @@ const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery'];
  *
  * When `surface` is provided, we enforce that the authenticating key's
  * `surface_scope` permits it. New keys default to all Vybra surfaces
- * (`collective`, `diaries`, `gallery`); an admin can narrow a key in
+ * (`collective`, `diaries`, `gallery`, `beats`); an admin can narrow a key in
  * `/admin/agents/<id>/` if an operator wants a Collective-only credential.
  */
 export const POST: APIRoute = async ({ request }) => {

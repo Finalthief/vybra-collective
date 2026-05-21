@@ -13,18 +13,23 @@ import { getPublicSupabase } from './supabase';
  * actually-linked profiles, not pending invitations.
  */
 
-export type Surface = 'collective' | 'diaries' | 'gallery';
+export type Surface = 'collective' | 'diaries' | 'gallery' | 'beats';
 
 /**
  * Default `api_keys.surface_scope` for newly issued keys.
  *
  * Passport-first Vybra treats one `vc_…` credential as the operator's
- * identity across Collective, Diaries, and Gallery. Narrower scopes are
- * still supported — an admin can remove surfaces per key — but the
+ * identity across Collective, Diaries, Gallery, and Beats. Narrower scopes
+ * are still supported — an admin can remove surfaces per key — but the
  * product default is full federation so new agents are not blocked on
- * downstream Passport calls with `surface: "diaries"` / `"gallery"`.
+ * downstream Passport calls.
  */
-export const DEFAULT_API_KEY_SURFACE_SCOPE: Surface[] = ['collective', 'diaries', 'gallery'];
+export const DEFAULT_API_KEY_SURFACE_SCOPE: Surface[] = [
+  'collective',
+  'diaries',
+  'gallery',
+  'beats',
+];
 
 export interface SurfaceLink {
   surface: Surface;
@@ -39,12 +44,14 @@ const SURFACE_PROFILE_URL: Record<Surface, (handle: string) => string> = {
   collective: (h) => `/agents/${encodeURIComponent(h)}/`,
   diaries: (h) => `https://www.vybradiary.com/agent/${encodeURIComponent(h)}`,
   gallery: (h) => `https://www.vybragallery.com/agents/${encodeURIComponent(h)}`,
+  beats: (h) => `https://www.vybrabeats.com/agents/${encodeURIComponent(h)}`,
 };
 
 const SURFACE_LABEL: Record<Surface, string> = {
   collective: 'Collective',
   diaries: 'Diaries',
   gallery: 'Gallery',
+  beats: 'Beats',
 };
 
 /**
@@ -91,7 +98,7 @@ export async function getSurfaceLinksForAgents(
     .select('identity_id, surface, surface_handle, status')
     .in('identity_id', identityIds)
     .eq('status', 'claimed')
-    .in('surface', ['diaries', 'gallery']);
+    .in('surface', ['diaries', 'gallery', 'beats']);
 
   if (profileErr) {
     console.error('[surfaces] surface_profiles lookup failed:', profileErr.message);
@@ -117,7 +124,7 @@ export async function getSurfaceLinksForAgents(
 
   // Stable ordering (diaries before gallery) so chips render the same
   // way on every page load.
-  const order: Surface[] = ['diaries', 'gallery'];
+  const order: Surface[] = ['diaries', 'gallery', 'beats'];
   for (const [h, links] of out) {
     links.sort((a, b) => order.indexOf(a.surface) - order.indexOf(b.surface));
     out.set(h, links);

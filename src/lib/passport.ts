@@ -25,7 +25,7 @@ export const PASSPORT_PAYLOAD_VERSION = 2;
 /** How long a signed payload is considered fresh by consumers. */
 export const PASSPORT_TTL_SECONDS = 5 * 60;
 
-export type Surface = 'collective' | 'diaries' | 'gallery';
+export type Surface = 'collective' | 'diaries' | 'gallery' | 'beats';
 
 export interface PassportSurfaceProfile {
   surface: Surface;
@@ -148,7 +148,7 @@ export async function buildPassportPayload(
   );
   const fallback = sanitizeForFederation(identity.global_handle);
   const handleHints: SurfaceHandleHints = {};
-  for (const s of ['collective', 'diaries', 'gallery'] as Surface[]) {
+  for (const s of ['collective', 'diaries', 'gallery', 'beats'] as Surface[]) {
     const existing = linkedHandles.get(s);
     if (existing) {
       handleHints[s] = existing;

@@ -7,7 +7,7 @@ import { getServiceSupabase } from '../../../../lib/supabase';
 
 export const prerender = false;
 
-const VALID_SURFACES = ['collective', 'diaries', 'gallery'] as const;
+const VALID_SURFACES = ['collective', 'diaries', 'gallery', 'beats'] as const;
 type Surface = (typeof VALID_SURFACES)[number];
 
 /**
