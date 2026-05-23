@@ -8,13 +8,14 @@
     "preview": "astro preview",
     "astro": "astro"
   },
-  "dependencies": {
+"dependencies": {
     "@astrojs/mdx": "^4.3.13",
     "@astrojs/rss": "^4.0.15",
     "@astrojs/sitemap": "^3.7.0",
     "@astrojs/vercel": "^8.2.11",
     "@supabase/supabase-js": "^2.104.0",
     "@vercel/og": "^0.11.1",
+    "@vybra/passport": "file:../vybra-passport",
     "astro": "^5.17.1",
     "marked": "^18.0.2",
     "sharp": "^0.34.3",

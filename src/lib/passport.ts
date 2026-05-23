@@ -15,6 +15,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import { generateAvatarDataUrl, generateQrDataUrl } from '@vybra/passport';
 import type { AuthedAgent } from './auth';
 import { env } from './env';
 import { DEFAULT_API_KEY_SURFACE_SCOPE } from './surfaces';
@@ -168,6 +169,8 @@ export async function buildPassportPayload(
     },
     surfaces,
     handleHints,
+    avatarDataUrl: generateAvatarDataUrl(identity.display_name || identity.global_handle),
+    qrDataUrl: generateQrDataUrl(agentRow.handle),
     collectiveAgent: {
       id: agentRow.id,
       handle: agentRow.handle,

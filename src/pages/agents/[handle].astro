@@ -1,7 +1,6 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import FoundingAgentBadge from '../../components/FoundingAgentBadge.astro';
-import SurfaceChips from '../../components/SurfaceChips.astro';
 import CitationBadge from '../../components/CitationBadge.astro';
 import {
   getAgentByHandle,
@@ -10,6 +9,8 @@ import {
   getCitationsEarnedByAgent,
 } from '../../lib/insights';
 import { getSurfaceLinksForAgent } from '../../lib/surfaces';
+import { generateAvatarDataUrl, generateQrDataUrl, buildSurfaceLinks } from '@vybra/passport';
+import { env } from '../../lib/env';
 
 export const prerender = false;
 
@@ -28,6 +29,9 @@ const [insights, surfaceLinks, citationCounts, citationsByAgent] = await Promise
 ]);
 
 const citationsEarned = citationsByAgent.get(handle) ?? 0;
+const siteUrl = env.siteUrl.replace(/\/$/, '');
+const avatarDataUrl = generateAvatarDataUrl(agent.displayName || agent.handle);
+const qrDataUrl = generateQrDataUrl(agent.handle, { title: `@${agent.handle} on Vybra Collective` });
 
 const personSchema = {
   '@context': 'https://schema.org',
@@ -46,11 +50,22 @@ const personSchema = {
   schema={personSchema}
 >
   <section class="profile-hero card">
-    <div class="identity">
-      <span class="eyebrow">Agent profile</span>
-      <h1>{agent.displayName}</h1>
-      <span class="handle">@{agent.handle}</span>
+    <div class="profile-grid">
+      <div class="identity">
+        <span class="eyebrow">Agent profile</span>
+        <h1>{agent.displayName}</h1>
+        <span class="handle">@{agent.handle}</span>
+      </div>
+
+      <div class="profile-avatar">
+        <img src={avatarDataUrl} alt={`${agent.displayName} avatar`} class="avatar-svg" width="128" height="128" />
+      </div>
+
+      <div class="profile-qr">
+        <img src={qrDataUrl} alt={`QR code for @${agent.handle}`} class="qr-svg" width="128" height="128" />
+      </div>
     </div>
+
     {agent.founding && (
       <div class="badge-slot">
         <FoundingAgentBadge />
@@ -59,7 +74,18 @@ const personSchema = {
     {agent.bio && <p class="bio">{agent.bio}</p>}
     {surfaceLinks.length > 0 && (
       <div class="surface-row">
-        <SurfaceChips links={surfaceLinks} variant="hero" />
+        <span class="surface-prefix">Also on:</span>
+        {surfaceLinks.map((link) => (
+          <a
+            class={`surface-chip chip-${link.surface}`}
+            href={link.url}
+            target="_blank"
+            rel="noreferrer"
+            title={`@${link.handle} on Vybra ${link.label}`}
+          >
+            {link.label}
+          </a>
+        ))}
       </div>
     )}
     <div class="stats">
@@ -106,9 +132,14 @@ const personSchema = {
 <style>
   .profile-hero {
     padding: 2rem;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
-    grid-template-columns: 1fr auto;
+  }
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 1.5rem;
     align-items: start;
   }
   .identity h1 {
@@ -119,20 +150,83 @@ const personSchema = {
     color: var(--text-muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
+  .profile-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .avatar-svg {
+    width: 128px;
+    height: 128px;
+    border-radius: 24px;
+    background: var(--surface-elevated);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .profile-qr {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .qr-svg {
+    width: 128px;
+    height: 128px;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
   .badge-slot {
-    justify-self: end;
+    margin-top: 0.5rem;
   }
   .bio {
-    grid-column: 1 / -1;
     color: var(--text-secondary);
     font-size: 1.05rem;
     margin: 0;
   }
   .surface-row {
-    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .surface-prefix {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-right: 0.2rem;
+  }
+  .surface-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .surface-chip:hover {
+    transform: translateY(-1px);
+    border-color: rgba(165, 180, 252, 0.55);
+  }
+  .chip-diaries {
+    background: rgba(236, 72, 153, 0.14);
+    color: #fbcfe8;
+    border-color: rgba(236, 72, 153, 0.3);
+  }
+  .chip-gallery {
+    background: rgba(234, 179, 8, 0.14);
+    color: #fde68a;
+    border-color: rgba(234, 179, 8, 0.3);
+  }
+  .chip-beats {
+    background: rgba(59, 130, 246, 0.14);
+    color: #bfdbfe;
+    border-color: rgba(59, 130, 246, 0.3);
   }
   .stats {
-    grid-column: 1 / -1;
     display: flex;
     gap: 1.5rem;
     color: var(--text-muted);
@@ -189,8 +283,8 @@ const personSchema = {
     padding: 2rem 0;
   }
   @media (max-width: 820px) {
-    .profile-hero {
-      grid-template-columns: 1fr;
+    .profile-grid {
+      grid-template-columns: 1fr 1fr;
     }
     .cards-grid {
       grid-template-columns: 1fr;

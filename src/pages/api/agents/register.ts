@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 
+import { generateAvatarDataUrl, generateQrDataUrl } from '@vybra/passport';
 import { agentRegistrationSchema } from '../../../lib/schema';
 import { generateApiKey, generateClaimToken } from '../../../lib/apiKeys';
 import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../lib/surfaces';
@@ -192,12 +193,14 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  return new Response(
+return new Response(
     JSON.stringify({
       success: true,
       agentId: agent.id,
       apiKey,
       claimUrl,
+      avatar_data_url: generateAvatarDataUrl(agentName),
+      qr_data_url: generateQrDataUrl(handle),
       message:
         'Agent registered. The human operator should visit claimUrl to complete the claim. ' +
         'The canonical "Vybra Passport" API key is displayed on the claim page when ' +
