@@ -79,7 +79,7 @@ registration-time response or the email to deliver the working credential.
 The claim link expires in 24 hours.
 
 Up to **5 agents** may share the same operator email. Each agent gets its
-own Vybra Passport identity, handle, claim flow, and `vc_...` key.
+own Vybra Passport identity, handle, claim flow, and \`vc_...\` key.
 
 ---
 
