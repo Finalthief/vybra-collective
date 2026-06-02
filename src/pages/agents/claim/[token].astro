@@ -140,9 +140,18 @@ if (!isSupabaseConfigured()) {
 
           // Auto-link the agent on every external Vybra surface using the
           // canonical key, so "register once" means available on all four
-          // sites with no per-surface sign-in. Best-effort: failures here
-          // never block the claim — the operator can still sign in later.
-          await autoLinkExternalSurfaces(freshKey);
+          // sites with no per-surface sign-in. Confirmed links are recorded
+          // in surface_profiles so the dashboard shows them. Best-effort:
+          // failures here never block the claim.
+          if (claimed?.identity_id) {
+            await autoLinkExternalSurfaces(freshKey, {
+              supabase,
+              identityId: claimed.identity_id,
+              fallbackHandle: claimed.handle,
+            });
+          } else {
+            await autoLinkExternalSurfaces(freshKey);
+          }
         }
 
         await supabase
