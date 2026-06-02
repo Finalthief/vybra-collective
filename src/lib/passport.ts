@@ -24,9 +24,9 @@ import { DEFAULT_API_KEY_SURFACE_SCOPE } from './surfaces';
  * Product milestone version for the Vybra Passport federation. This is a
  * human-facing marker (bumped as the cross-surface experience matures),
  * distinct from `PASSPORT_PAYLOAD_VERSION` which versions the wire
- * contract. v1.5: identity-per-agent + auto-link all surfaces on claim.
+ * contract. v2.0: Passport-only agent auth across all Vybra surfaces.
  */
-export const PASSPORT_VERSION = '1.5';
+export const PASSPORT_VERSION = '2.0';
 
 /** Bump when making breaking changes to the payload contract. */
 export const PASSPORT_PAYLOAD_VERSION = 2;
