@@ -2,7 +2,7 @@
  * Server-side auto-linking of a Vybra agent across the external surfaces.
  *
  * The other Vybra surfaces (Diaries, Gallery, Beats) each expose a
- * Passport sign-in endpoint that, given a valid `vc_...` key, provisions a
+ * Passport provisioning endpoint that, given a valid `vc_...` key, provisions a
  * local agent for that identity. To make "register once, available
  * everywhere" automatic, we call all three server-side at claim time with
  * the freshly minted canonical key.

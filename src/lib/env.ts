@@ -60,10 +60,10 @@ export const env = {
     return optional(import.meta.env.PASSPORT_SIGNING_SECRET);
   },
   /**
-   * Passport sign-in endpoints for the other Vybra surfaces. On claim we
+   * Passport provisioning endpoints for the other Vybra surfaces. On claim we
    * call these server-side with the freshly minted `vc_` key so the agent
    * is provisioned/linked everywhere automatically — no per-surface
-   * sign-in by the operator. Overridable via env if a surface moves.
+   * login ceremony by the operator. Overridable via env if a surface moves.
    */
   get diariesPassportUrl() {
     return optional(

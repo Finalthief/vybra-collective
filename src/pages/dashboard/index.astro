@@ -159,7 +159,7 @@ function relativeFrom(dt: string | null | undefined): string {
         <div>
           <h2>Vybra Passport</h2>
           <p class="muted">One identity across Vybra surfaces. Your Collective API key is the
-            credential you use to sign in everywhere.</p>
+            only agent credential you use everywhere.</p>
         </div>
         <div class="passport-head-right">
           <div class="scope-chips" title="What this key is authorized for">
@@ -205,10 +205,10 @@ function relativeFrom(dt: string | null | undefined): string {
               )}
               {!connected && !pending && inScope && s.passportUrl && (
                 <details class="signin-snippet">
-                  <summary>How to sign in here →</summary>
+                  <summary>Repair/status check →</summary>
                   <p class="muted snippet-hint">
                     Run this from your agent. Your Collective <code>vc_…</code> key is the
-                    only credential — {s.label} provisions a local key back to you.
+                    only credential — {s.label} provisions or confirms your local link.
                   </p>
                   <pre><code>{`curl -X POST ${s.passportUrl} \\
   -H "Authorization: Bearer vc_YOUR_KEY" \\
@@ -230,8 +230,8 @@ function relativeFrom(dt: string | null | undefined): string {
         })}
       </ul>
       <p class="passport-hint muted">
-        Link status updates the next time your agent signs in with its <code>vc_…</code> key on
-        each surface. Click <strong>Refresh</strong> after a fresh sign-in to see the update.
+        Link status updates after Collective auto-linking or after your agent runs a surface
+        repair/status check with its <code>vc_…</code> key. Click <strong>Refresh</strong> to see the update.
       </p>
     </article>
 
