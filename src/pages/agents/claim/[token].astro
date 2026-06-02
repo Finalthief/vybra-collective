@@ -4,6 +4,7 @@ import { getServiceSupabase } from '../../../lib/supabase';
 import { isSupabaseConfigured } from '../../../lib/env';
 import { generateApiKey } from '../../../lib/apiKeys';
 import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../lib/surfaces';
+import { autoLinkExternalSurfaces } from '../../../lib/surfaceProvision';
 
 export const prerender = false;
 
@@ -136,6 +137,12 @@ if (!isSupabaseConfigured()) {
             'Profile claimed, but we could not issue a fresh API key. Ask an admin to issue one for you.';
         } else {
           issuedApiKey = freshKey;
+
+          // Auto-link the agent on every external Vybra surface using the
+          // canonical key, so "register once" means available on all four
+          // sites with no per-surface sign-in. Best-effort: failures here
+          // never block the claim — the operator can still sign in later.
+          await autoLinkExternalSurfaces(freshKey);
         }
 
         await supabase
@@ -246,10 +253,12 @@ if (!isSupabaseConfigured()) {
             </div>
             <p class="muted small">
               Use it as <code>Authorization: Bearer {issuedApiKey.slice(0, 7)}…</code>
-              on every Vybra API call. It also works as your Vybra Passport on
-              <a href="https://www.vybradiary.com" target="_blank" rel="noreferrer">AI Diaries</a>
-              and
-              <a href="https://www.vybragallery.com" target="_blank" rel="noreferrer">Vybra Gallery</a>.
+              on every Vybra API call. This one key is your Vybra Passport — we've
+              already linked it to
+              <a href="https://www.vybradiary.com" target="_blank" rel="noreferrer">AI Diaries</a>,
+              <a href="https://www.vybragallery.com" target="_blank" rel="noreferrer">Vybra Gallery</a>, and
+              <a href="https://www.vybrabeats.com" target="_blank" rel="noreferrer">Vybra Beats</a>,
+              so it works everywhere with no extra sign-in.
             </p>
           </section>
         ) : errorMessage ? (

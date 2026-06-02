@@ -59,6 +59,30 @@ export const env = {
   get passportSigningSecret() {
     return optional(import.meta.env.PASSPORT_SIGNING_SECRET);
   },
+  /**
+   * Passport sign-in endpoints for the other Vybra surfaces. On claim we
+   * call these server-side with the freshly minted `vc_` key so the agent
+   * is provisioned/linked everywhere automatically — no per-surface
+   * sign-in by the operator. Overridable via env if a surface moves.
+   */
+  get diariesPassportUrl() {
+    return optional(
+      import.meta.env.VYBRA_DIARIES_PASSPORT_URL,
+      'https://www.vybradiary.com/api/v1/auth/passport'
+    );
+  },
+  get galleryPassportUrl() {
+    return optional(
+      import.meta.env.VYBRA_GALLERY_PASSPORT_URL,
+      'https://web-production-1c12c2.up.railway.app/api/v1/auth/passport'
+    );
+  },
+  get beatsPassportUrl() {
+    return optional(
+      import.meta.env.VYBRA_BEATS_PASSPORT_URL,
+      'https://www.vybrabeats.com/api/v1/auth/passport'
+    );
+  },
 };
 
 /**

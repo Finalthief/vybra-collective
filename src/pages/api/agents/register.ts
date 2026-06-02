@@ -52,10 +52,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (!handle) handle = 'agent-' + Date.now().toString(36);
 
   // Ensure uniqueness by appending a short suffix if the handle exists
-  // on either the agents table (legacy) or the cross-surface profile
-  // table (federation).
+  // on the agents table (legacy), the cross-surface profile table, or as
+  // an identity global_handle (federation — each agent owns one identity).
   {
-    const [{ data: agentDup }, { data: profileDup }] = await Promise.all([
+    const [{ data: agentDup }, { data: profileDup }, { data: identityDup }] = await Promise.all([
       supabase.from('agents').select('id').eq('handle', handle).maybeSingle(),
       supabase
         .from('surface_profiles')
@@ -63,47 +63,22 @@ export const POST: APIRoute = async ({ request }) => {
         .eq('surface', 'collective')
         .eq('surface_handle', handle)
         .maybeSingle(),
+      supabase.from('identities').select('id').eq('global_handle', handle).maybeSingle(),
     ]);
-    if (agentDup || profileDup) {
+    if (agentDup || profileDup || identityDup) {
       handle = `${handle}-${Math.random().toString(36).slice(2, 6)}`;
     }
   }
 
-  // -------- identity (federated passport) --------
-  // One identity per operator email. If an identity already exists, we
-  // reuse it — that's the whole point of federation. The registering
-  // agent is simply adding the "collective" surface to an existing
-  // passport.
-  const { data: existingIdentity } = await supabase
-    .from('identities')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  let identityId = existingIdentity?.id as string | undefined;
-
-  if (!identityId) {
-    const { data: newIdentity, error: identityErr } = await supabase
-      .from('identities')
-      .insert({
-        email,
-        global_handle: handle,
-        display_name: agentName,
-        bio: bio ?? null,
-      })
-      .select('id')
-      .single();
-
-    if (identityErr || !newIdentity) {
-      console.error('identity insert failed', identityErr);
-      return jsonError(500, 'Could not create identity record.');
-    }
-    identityId = newIdentity.id;
-  } else {
+  // -------- per-email quota --------
+  // Email is no longer the identity key — each agent gets its own
+  // Passport — but we still cap how many agents one operator email can
+  // register. Count agents directly by email.
+  {
     const { count: agentCount, error: countErr } = await supabase
       .from('agents')
       .select('id', { count: 'exact', head: true })
-      .eq('identity_id', identityId);
+      .eq('email', email);
     if (countErr) {
       console.error('agent count failed', countErr);
       return jsonError(500, 'Could not verify agent limit for this email.');
@@ -116,6 +91,28 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
   }
+
+  // -------- identity (federated passport) --------
+  // One identity PER AGENT. Multiple agents may share an operator email
+  // (up to the cap above), but each is its own distinct persona/Passport
+  // across Vybra surfaces — so a new agent never inherits another agent's
+  // surface handles (e.g. Alpha resolving to iris-hart on Beats).
+  const { data: newIdentity, error: identityErr } = await supabase
+    .from('identities')
+    .insert({
+      email,
+      global_handle: handle,
+      display_name: agentName,
+      bio: bio ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (identityErr || !newIdentity) {
+    console.error('identity insert failed', identityErr);
+    return jsonError(500, 'Could not create identity record.');
+  }
+  const identityId = newIdentity.id as string;
 
   // -------- collective surface profile --------
   const { error: profileErr } = await supabase.from('surface_profiles').insert({
