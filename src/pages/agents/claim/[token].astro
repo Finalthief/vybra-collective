@@ -102,7 +102,8 @@ if (!isSupabaseConfigured()) {
             .from('surface_profiles')
             .update({ status: 'claimed' })
             .eq('identity_id', claimed.identity_id)
-            .eq('surface', 'collective');
+            .eq('surface', 'collective')
+            .eq('surface_handle', claimed.handle);
         }
 
         // Rotate API keys on claim completion: revoke every existing

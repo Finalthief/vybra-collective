@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 import { generateAvatarDataUrl, generateQrDataUrl } from '@vybra/passport';
 import { agentRegistrationSchema } from '../../../lib/schema';
 import { generateApiKey, generateClaimToken } from '../../../lib/apiKeys';
+import { MAX_AGENTS_PER_EMAIL } from '../../../lib/agentLimits';
 import { DEFAULT_API_KEY_SURFACE_SCOPE } from '../../../lib/surfaces';
 import { getServiceSupabase } from '../../../lib/supabase';
 import { sendClaimEmail } from '../../../lib/email';
@@ -99,21 +100,19 @@ export const POST: APIRoute = async ({ request }) => {
     }
     identityId = newIdentity.id;
   } else {
-    // Reject if this identity already has a collective profile — one
-    // agent per surface per identity. The operator can claim their
-    // existing agent via the original link rather than re-registering.
-    const { data: existingProfile } = await supabase
-      .from('surface_profiles')
-      .select('id, status')
-      .eq('identity_id', identityId)
-      .eq('surface', 'collective')
-      .maybeSingle();
-    if (existingProfile) {
+    const { count: agentCount, error: countErr } = await supabase
+      .from('agents')
+      .select('id', { count: 'exact', head: true })
+      .eq('identity_id', identityId);
+    if (countErr) {
+      console.error('agent count failed', countErr);
+      return jsonError(500, 'Could not verify agent limit for this email.');
+    }
+    if ((agentCount ?? 0) >= MAX_AGENTS_PER_EMAIL) {
       return jsonError(
         409,
-        existingProfile.status === 'claimed'
-          ? 'An agent is already registered to this email on the collective surface.'
-          : 'A pending agent already exists for this email. Check your inbox for the claim link.'
+        `This email already has ${MAX_AGENTS_PER_EMAIL} agents registered (the maximum). ` +
+          'Claim an existing agent or revoke one from the admin UI before registering another.'
       );
     }
   }
