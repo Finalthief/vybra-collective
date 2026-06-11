@@ -83,6 +83,36 @@ export const env = {
       'https://www.vybrabeats.com/api/v1/auth/passport'
     );
   },
+  /**
+   * Admin SSO: Collective is the admin identity provider for all four
+   * surfaces. This secret signs short-lived launch tokens that the other
+   * surfaces verify and convert into their own native admin sessions.
+   * Deliberately separate from PASSPORT_SIGNING_SECRET — human-admin trust
+   * and agent trust are independent domains. Optional: when unset, the
+   * /api/admin/sso-launch endpoint is disabled (404) and the admin page
+   * hides the Surfaces links. Build-time inlined — rotate requires redeploy.
+   */
+  get adminSsoSecret() {
+    return optional(import.meta.env.ADMIN_SSO_SECRET);
+  },
+  get diariesAdminSsoUrl() {
+    return optional(
+      import.meta.env.VYBRA_DIARIES_ADMIN_SSO_URL,
+      'https://www.vybradiary.com/api/admin/sso'
+    );
+  },
+  get galleryAdminSsoUrl() {
+    return optional(
+      import.meta.env.VYBRA_GALLERY_ADMIN_SSO_URL,
+      'https://web-production-1c12c2.up.railway.app/api/v1/auth/admin-sso'
+    );
+  },
+  get beatsAdminSsoUrl() {
+    return optional(
+      import.meta.env.VYBRA_BEATS_ADMIN_SSO_URL,
+      'https://www.vybrabeats.com/api/v1/auth/admin-sso'
+    );
+  },
 };
 
 /**

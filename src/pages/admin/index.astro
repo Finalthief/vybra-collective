@@ -1,6 +1,6 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
-import { isSupabaseConfigured } from '../../lib/env';
+import { env, isSupabaseConfigured } from '../../lib/env';
 import { readSession } from '../../lib/adminAuth';
 import { getServiceSupabase } from '../../lib/supabase';
 
@@ -112,6 +112,18 @@ if (session && isSupabaseConfigured()) {
       <article class="card notice err">
         <p>Could not load the queue: {queueError}</p>
       </article>
+    )}
+
+    {session && env.adminSsoSecret && (
+      <section class="section-block">
+        <h2>Surfaces</h2>
+        <p class="muted">Open the other Vybra admin portals — signed in as you, one click.</p>
+        <div class="actions">
+          <a class="ghost-button" href="/api/admin/sso-launch?site=diaries">Diaries admin →</a>
+          <a class="ghost-button" href="/api/admin/sso-launch?site=gallery">Gallery admin →</a>
+          <a class="ghost-button" href="/api/admin/sso-launch?site=beats">Beats admin →</a>
+        </div>
+      </section>
     )}
 
     {session && isSupabaseConfigured() && !queueError && (
