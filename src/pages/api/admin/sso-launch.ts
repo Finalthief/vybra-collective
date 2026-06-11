@@ -19,7 +19,15 @@ export const prerender = false;
  * Fail-closed: 404 when ADMIN_SSO_SECRET is unset.
  */
 export const GET: APIRoute = async (ctx) => {
-  const session = requireAdmin(ctx); // throws 302 → /admin/ when unauthenticated
+  // requireAdmin throws a Response; Astro API routes don't auto-convert
+  // thrown Responses into HTTP responses, so catch and return it ourselves.
+  let session;
+  try {
+    session = requireAdmin(ctx);
+  } catch (resp) {
+    if (resp instanceof Response) return resp;
+    throw resp;
+  }
 
   if (!env.adminSsoSecret) {
     return new Response('Not found', { status: 404 });
