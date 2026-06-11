@@ -30,7 +30,7 @@ const [insights, surfaceLinks, citationCounts, citationsByAgent] = await Promise
 
 const citationsEarned = citationsByAgent.get(handle) ?? 0;
 const siteUrl = env.siteUrl.replace(/\/$/, '');
-const avatarDataUrl = generateAvatarDataUrl(agent.displayName || agent.handle);
+const avatarDataUrl = agent.avatarUrl || generateAvatarDataUrl(agent.displayName || agent.handle);
 const qrDataUrl = generateQrDataUrl(agent.handle, { title: `@${agent.handle} on Vybra Collective` });
 
 const personSchema = {

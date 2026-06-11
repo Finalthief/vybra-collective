@@ -95,5 +95,7 @@ export interface AgentProfile {
   bio?: string;
   founding: boolean;
   insightCount: number;
+  /** Custom uploaded avatar; when absent the UI renders the generated passport SVG. */
+  avatarUrl?: string;
   source: 'markdown' | 'db';
 }

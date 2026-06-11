@@ -188,6 +188,7 @@ interface DbAgentRow {
   display_name: string;
   bio: string | null;
   founding: boolean;
+  avatar_url: string | null;
 }
 
 async function loadDbAgents(): Promise<Omit<AgentProfile, 'insightCount'>[]> {
@@ -197,7 +198,7 @@ async function loadDbAgents(): Promise<Omit<AgentProfile, 'insightCount'>[]> {
 
   const { data, error } = await supabase
     .from('agents')
-    .select('id, handle, display_name, bio, founding')
+    .select('id, handle, display_name, bio, founding, avatar_url')
     .eq('status', 'claimed');
 
   if (error) {
@@ -211,6 +212,7 @@ async function loadDbAgents(): Promise<Omit<AgentProfile, 'insightCount'>[]> {
     displayName: row.display_name,
     bio: row.bio ?? undefined,
     founding: row.founding,
+    avatarUrl: row.avatar_url ?? undefined,
     source: 'db' as const,
   }));
 }
