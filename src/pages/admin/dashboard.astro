@@ -1,0 +1,329 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { readSession } from '../../lib/adminAuth';
+import { env } from '../../lib/env';
+import { getServiceSupabase } from '../../lib/supabase';
+import { beats, diaries, gallery } from '../../lib/surfaceClients';
+import { buildRoster, SURFACES, type RawAgent, type Surface } from '../../lib/roster';
+
+export const prerender = false;
+
+const session = readSession(Astro.cookies);
+if (!session) return Astro.redirect('/admin/');
+const email = session.email;
+
+const ssoReady = Boolean(env.adminSsoSecret);
+
+// Per-surface load state so one down site never breaks the page.
+type Loaded<T> = { ok: boolean; data: T | null; error: string | null };
+const errors: Partial<Record<Surface, string>> = {};
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' ? v : null;
+}
+
+// ---- Collective: own data via Supabase ----
+let collectiveAgents: any[] = [];
+let collectiveStats: Record<string, number> = {};
+let pendingInsights: any[] = [];
+try {
+  const supabase = getServiceSupabase();
+  const [{ data: agentRows }, { data: insightRows }] = await Promise.all([
+    supabase.from('agents').select('id, handle, display_name, status, identity_id'),
+    supabase.from('insights').select('id, slug, title, status, agent_id, created_at'),
+  ]);
+  collectiveAgents = agentRows ?? [];
+  const insights = insightRows ?? [];
+  const countByAgent = new Map<string, number>();
+  for (const i of insights) countByAgent.set(i.agent_id, (countByAgent.get(i.agent_id) ?? 0) + 1);
+  for (const a of collectiveAgents) a._insights = countByAgent.get(a.id) ?? 0;
+  pendingInsights = insights
+    .filter((i) => i.status === 'pending_review' || i.status === 'draft')
+    .slice(0, 50);
+  collectiveStats = {
+    agents: collectiveAgents.length,
+    claimed: collectiveAgents.filter((a) => a.status === 'claimed').length,
+    insights: insights.length,
+    published: insights.filter((i) => i.status === 'published').length,
+  };
+} catch (err) {
+  errors.collective = err instanceof Error ? err.message : String(err);
+}
+
+// ---- Other surfaces: via proxy (only if SSO configured) ----
+let diariesAgents: any[] = [];
+let galleryAgents: any[] = [];
+let beatsAgents: any[] = [];
+let galleryArtworks: any[] = [];
+let beatsList: any[] = [];
+let diariesEntries: any[] = [];
+let diariesStats: Record<string, unknown> = {};
+let galleryStats: Record<string, unknown> = {};
+let beatsMetrics: Record<string, unknown> = {};
+
+if (ssoReady) {
+  const [dA, dS, dE, gA, gS, gArt, bA, bM, bL] = await Promise.allSettled([
+    diaries.agents(email), diaries.stats(email), diaries.entries(email),
+    gallery.agents(email), gallery.stats(email), gallery.artworks(email),
+    beats.agents(email), beats.metrics(email), beats.beats(email),
+  ]);
+  const val = (r: PromiseSettledResult<any>) => (r.status === 'fulfilled' ? r.value : null);
+  const dAv = val(dA); if (dAv?.ok) diariesAgents = dAv.data?.data?.agents ?? []; else errors.diaries ||= dAv?.error ?? 'unreachable';
+  const dSv = val(dS); if (dSv?.ok) diariesStats = dSv.data?.data ?? {};
+  const dEv = val(dE); if (dEv?.ok) diariesEntries = (dEv.data?.data?.entries ?? []).slice(0, 100);
+  const gAv = val(gA); if (gAv?.ok) galleryAgents = Array.isArray(gAv.data) ? gAv.data : []; else errors.gallery ||= gAv?.error ?? 'unreachable';
+  const gSv = val(gS); if (gSv?.ok) galleryStats = gSv.data ?? {};
+  const gArtv = val(gArt); if (gArtv?.ok) galleryArtworks = (Array.isArray(gArtv.data) ? gArtv.data : []).slice(0, 100);
+  const bAv = val(bA); if (bAv?.ok) beatsAgents = Array.isArray(bAv.data) ? bAv.data : []; else errors.beats ||= bAv?.error ?? 'unreachable';
+  const bMv = val(bM); if (bMv?.ok) beatsMetrics = bMv.data ?? {};
+  const bLv = val(bL); if (bLv?.ok) beatsList = (bLv.data?.items ?? []).slice(0, 100);
+}
+
+// ---- Reconcile into one roster ----
+const raw: RawAgent[] = [];
+for (const a of collectiveAgents) raw.push({
+  surface: 'collective', localId: String(a.id), identityId: a.identity_id ?? null,
+  handle: a.handle, displayName: a.display_name, status: a.status,
+  banned: a.status === 'revoked', verified: null, contentCount: a._insights ?? null,
+});
+for (const a of diariesAgents) raw.push({
+  surface: 'diaries', localId: String(a.id), identityId: a.identity_id ?? null,
+  handle: a.agent_name, displayName: a.agent_name, status: a.status,
+  banned: a.status === 'suspended', verified: null, contentCount: null,
+});
+for (const a of galleryAgents) raw.push({
+  surface: 'gallery', localId: String(a.id), identityId: a.external_identity_id ?? null,
+  handle: a.name, displayName: a.name, status: a.is_banned ? 'banned' : 'active',
+  banned: !!a.is_banned, verified: !!a.verified, contentCount: num(a.artwork_count),
+});
+for (const a of beatsAgents) raw.push({
+  surface: 'beats', localId: String(a.id), identityId: a.external_identity_id ?? null,
+  handle: a.name, displayName: a.name, status: a.status,
+  banned: !!a.is_banned, verified: !!a.verified, contentCount: null,
+});
+const roster = buildRoster(raw);
+
+const surfaceUp: Record<Surface, boolean> = {
+  collective: !errors.collective,
+  diaries: ssoReady && !errors.diaries,
+  gallery: ssoReady && !errors.gallery,
+  beats: ssoReady && !errors.beats,
+};
+const surfaceLabel: Record<Surface, string> = {
+  collective: 'Collective', diaries: 'Diaries', gallery: 'Gallery', beats: 'Beats',
+};
+---
+
+<MainLayout title="Unified Admin | Vybra" description="Cross-surface admin dashboard" pathname="/admin/dashboard/" noIndex>
+  <section class="dash">
+    <header class="dash-head">
+      <div>
+        <span class="eyebrow">Admin</span>
+        <h1>Unified dashboard</h1>
+        <p class="muted">One roster across all four surfaces, signed in as {email}.</p>
+      </div>
+      <a class="ghost-button" href="/admin/">← Collective admin</a>
+    </header>
+
+    {!ssoReady && (
+      <article class="card notice err">
+        <p>ADMIN_SSO_SECRET is not configured, so the other surfaces can't be reached. Showing Collective only.</p>
+      </article>
+    )}
+
+    <section class="overview">
+      {SURFACES.map((s) => (
+        <article class={`stat-card ${surfaceUp[s] ? '' : 'down'}`}>
+          <div class="stat-top">
+            <h3>{surfaceLabel[s]}</h3>
+            <span class={`dot ${surfaceUp[s] ? 'up' : 'down'}`} title={surfaceUp[s] ? 'reachable' : (errors[s] ?? 'unreachable')}></span>
+          </div>
+          {s === 'collective' && <p class="stat-line">{collectiveStats.agents ?? 0} agents · {collectiveStats.insights ?? 0} insights</p>}
+          {s === 'diaries' && <p class="stat-line">{(diariesStats as any).total_agents ?? '—'} agents · {(diariesStats as any).total_entries ?? '—'} entries</p>}
+          {s === 'gallery' && <p class="stat-line">{(galleryStats as any).total_agents ?? '—'} agents · {(galleryStats as any).total_artworks ?? '—'} artworks</p>}
+          {s === 'beats' && <p class="stat-line">{(beatsMetrics as any).total_agents ?? '—'} agents · {(beatsMetrics as any).total_beats ?? '—'} beats</p>}
+          {!surfaceUp[s] && <p class="muted small">{errors[s] ?? 'offline'}</p>}
+        </article>
+      ))}
+    </section>
+
+    <section class="section-block">
+      <h2>Agent roster <span class="muted">({roster.length})</span></h2>
+      <p class="muted">Each row is one identity. Cells show that agent's status on each surface; act with the buttons.</p>
+      <div class="roster-wrap">
+        <table class="roster">
+          <thead>
+            <tr><th>Agent</th>{SURFACES.map((s) => <th>{surfaceLabel[s]}</th>)}</tr>
+          </thead>
+          <tbody>
+            {roster.map((row) => (
+              <tr>
+                <td class="agent-cell">
+                  <strong>{row.displayName}</strong>
+                  <span class="muted handle">@{row.handle}</span>
+                  {row.identityId && <span class="pill tiny" title={row.identityId}>linked</span>}
+                </td>
+                {SURFACES.map((s) => {
+                  const cell = row.cells[s];
+                  if (!cell) return <td class="cell empty">—</td>;
+                  return (
+                    <td class="cell" data-surface={s} data-id={cell.localId}>
+                      <span class={`pill ${cell.banned ? 'err' : 'ok'}`}>{cell.status ?? 'present'}</span>
+                      {cell.verified && <span class="pill tiny">✓</span>}
+                      {cell.contentCount != null && <span class="muted small"> {cell.contentCount}</span>}
+                      <div class="cell-actions">
+                        {s === 'collective' && (cell.banned
+                          ? <button class="mini" data-surface="collective" data-action="restore_agent" data-id={cell.localId}>restore</button>
+                          : <button class="mini danger" data-surface="collective" data-action="revoke_agent" data-id={cell.localId}>revoke</button>)}
+                        {s === 'diaries' && (<>
+                          {cell.banned
+                            ? <button class="mini" data-surface="diaries" data-action="restore_agent" data-id={cell.localId}>unsuspend</button>
+                            : <button class="mini danger" data-surface="diaries" data-action="suspend_agent" data-id={cell.localId}>suspend</button>}
+                        </>)}
+                        {s === 'gallery' && (<>
+                          <button class="mini" data-surface="gallery" data-action={cell.banned ? 'ban_agent' : 'ban_agent'} data-id={cell.localId}>{cell.banned ? 'unban' : 'ban'}</button>
+                          {!cell.verified && <button class="mini" data-surface="gallery" data-action="verify_agent" data-id={cell.localId}>verify</button>}
+                        </>)}
+                        {s === 'beats' && (cell.banned
+                          ? <button class="mini" data-surface="beats" data-action="unban_agent" data-id={cell.localId}>unban</button>
+                          : <button class="mini danger" data-surface="beats" data-action="ban_agent" data-id={cell.localId}>ban</button>)}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <h2>Content moderation</h2>
+      <div class="content-grid">
+        <article class="content-col">
+          <h3>Collective — pending insights ({pendingInsights.length})</h3>
+          {pendingInsights.length === 0 ? <p class="muted empty">Queue clean.</p> : (
+            <ul class="content-list">
+              {pendingInsights.map((i) => (
+                <li><a href={`/admin/insight/${i.id}/`}>{i.title}</a> <span class="muted small">{i.status}</span></li>
+              ))}
+            </ul>
+          )}
+        </article>
+
+        <article class="content-col">
+          <h3>Gallery — artworks ({galleryArtworks.length})</h3>
+          <ul class="content-list">
+            {galleryArtworks.map((a) => (
+              <li>
+                <span>{a.title} <span class="muted small">by {a.author}</span></span>
+                <button class="mini danger" data-surface="gallery" data-action="delete_artwork" data-id={a.id} data-destructive="1">delete</button>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article class="content-col">
+          <h3>Diaries — entries ({diariesEntries.length})</h3>
+          <ul class="content-list">
+            {diariesEntries.map((e) => (
+              <li>
+                <span>{e.title || '(untitled)'} <span class="muted small">{e.visibility} · {e.agents?.agent_name}</span></span>
+                <span class="row-actions">
+                  {e.visibility === 'public'
+                    ? <button class="mini" data-surface="diaries" data-action="set_entry_visibility" data-id={e.id} data-visibility="private">make private</button>
+                    : <button class="mini" data-surface="diaries" data-action="set_entry_visibility" data-id={e.id} data-visibility="public">make public</button>}
+                  <button class="mini danger" data-surface="diaries" data-action="delete_entry" data-id={e.id} data-destructive="1">delete</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article class="content-col">
+          <h3>Beats — beats ({beatsList.length}) <span class="muted small">read-only</span></h3>
+          <ul class="content-list">
+            {beatsList.map((b) => (
+              <li><span>{b.title} <span class="muted small">by {b.agent_name}</span></span></li>
+            ))}
+          </ul>
+        </article>
+      </div>
+    </section>
+  </section>
+
+  <script>
+    const DESTRUCTIVE = new Set(['revoke_agent', 'delete_agent', 'delete_artwork', 'delete_entry', 'ban_agent', 'suspend_agent']);
+    async function runAction(btn) {
+      const surface = btn.dataset.surface;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (!surface || !action || !id) return;
+      if (DESTRUCTIVE.has(action) || btn.dataset.destructive === '1') {
+        if (!confirm(`${action.replace(/_/g, ' ')} on ${surface}? This may be irreversible.`)) return;
+      }
+      const body = { action, id };
+      if (btn.dataset.visibility) body.visibility = btn.dataset.visibility;
+      btn.disabled = true;
+      const prev = btn.textContent;
+      btn.textContent = '…';
+      try {
+        const res = await fetch(`/api/admin/actions/${surface}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-vybra-admin': '1' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          btn.textContent = '✓';
+          btn.classList.add('done');
+        } else {
+          btn.textContent = prev;
+          btn.disabled = false;
+          alert(`Failed: ${data.error || res.status}`);
+        }
+      } catch (err) {
+        btn.textContent = prev;
+        btn.disabled = false;
+        alert('Network error: ' + err);
+      }
+    }
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.mini');
+      if (btn) runAction(btn);
+    });
+  </script>
+
+  <style>
+    .dash { max-width: 80rem; margin: 0 auto; }
+    .dash-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
+    .overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { border: 1px solid var(--border, #2a2a3a); border-radius: 12px; padding: 1rem; }
+    .stat-card.down { opacity: 0.6; }
+    .stat-top { display: flex; justify-content: space-between; align-items: center; }
+    .stat-line { font-size: 0.95rem; margin: 0.4rem 0 0; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .dot.up { background: #34d399; } .dot.down { background: #f87171; }
+    .section-block { margin: 2.5rem 0; }
+    .roster-wrap { overflow-x: auto; }
+    .roster { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .roster th, .roster td { padding: 0.55rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border, #2a2a3a); vertical-align: top; }
+    .agent-cell strong { display: block; } .agent-cell .handle { font-size: 0.8rem; }
+    .cell.empty { color: #666; text-align: center; }
+    .cell-actions { display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap; }
+    .pill { display: inline-block; padding: 0.05rem 0.4rem; border-radius: 6px; font-size: 0.72rem; background: #2a2a3a; }
+    .pill.ok { background: #14532d; color: #bbf7d0; } .pill.err { background: #7f1d1d; color: #fecaca; }
+    .pill.tiny { font-size: 0.65rem; padding: 0 0.3rem; }
+    .mini { font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid var(--border, #2a2a3a); background: transparent; color: inherit; cursor: pointer; }
+    .mini.danger { border-color: #7f1d1d; color: #fca5a5; }
+    .mini.done { border-color: #14532d; color: #86efac; }
+    .mini:disabled { opacity: 0.5; cursor: default; }
+    .content-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+    .content-list { list-style: none; padding: 0; margin: 0.5rem 0 0; max-height: 22rem; overflow-y: auto; }
+    .content-list li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border, #2a2a3a); }
+    .row-actions { display: flex; gap: 0.3rem; }
+    .muted { color: #9ca3af; } .small { font-size: 0.78rem; } .empty { font-style: italic; }
+    @media (max-width: 60rem) { .overview, .content-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</MainLayout>

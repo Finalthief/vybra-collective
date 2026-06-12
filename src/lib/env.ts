@@ -113,6 +113,22 @@ export const env = {
       'https://www.vybrabeats.com/api/v1/auth/admin-sso'
     );
   },
+  /**
+   * Base URLs for the other surfaces' admin APIs. The unified dashboard's
+   * server-side proxy appends each surface's admin paths to these.
+   */
+  get diariesAdminApiBase() {
+    return optional(import.meta.env.VYBRA_DIARIES_ADMIN_API_BASE, 'https://www.vybradiary.com');
+  },
+  get galleryAdminApiBase() {
+    return optional(
+      import.meta.env.VYBRA_GALLERY_ADMIN_API_BASE,
+      'https://web-production-1c12c2.up.railway.app'
+    );
+  },
+  get beatsAdminApiBase() {
+    return optional(import.meta.env.VYBRA_BEATS_ADMIN_API_BASE, 'https://www.vybrabeats.com');
+  },
 };
 
 /**

@@ -117,7 +117,10 @@ if (session && isSupabaseConfigured()) {
     {session && env.adminSsoSecret && (
       <section class="section-block">
         <h2>Surfaces</h2>
-        <p class="muted">Open the other Vybra admin portals — signed in as you, one click.</p>
+        <p class="muted">One dashboard for everything, or jump straight into a native admin portal.</p>
+        <div class="actions">
+          <a class="primary-button" href="/admin/dashboard/">Unified dashboard →</a>
+        </div>
         <div class="actions">
           <a class="ghost-button" href="/api/admin/sso-launch?site=diaries">Diaries admin →</a>
           <a class="ghost-button" href="/api/admin/sso-launch?site=gallery">Gallery admin →</a>
