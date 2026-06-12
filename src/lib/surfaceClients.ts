@@ -50,7 +50,7 @@ export const gallery = {
 export const beats = {
   metrics: (email: string) => proxyAdminFetch('beats', email, '/api/v1/admin/metrics'),
   agents: (email: string) => proxyAdminFetch('beats', email, '/api/v1/admin/agents'),
-  beats: (email: string) => proxyAdminFetch('beats', email, '/api/v1/beats?limit=200'),
+  beats: (email: string) => proxyAdminFetch('beats', email, '/api/v1/beats?limit=100'),
   setAgent: (email: string, id: string | number, body: Record<string, unknown>) =>
     proxyAdminFetch('beats', email, `/api/v1/admin/agents/${id}`, jsonInit('PATCH', body)),
   setVerified: (email: string, id: string | number, verified: boolean) =>
