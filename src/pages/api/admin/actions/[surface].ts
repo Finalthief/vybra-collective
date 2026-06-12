@@ -98,6 +98,19 @@ export const POST: APIRoute = async (ctx) => {
       await logAction(email, `collective:restore_agent:${id}`);
       return json(200, { ok: true });
     }
+    if (action === 'delete_agent') {
+      // Cascades api_keys / claims / insights / attachments via FK.
+      const { error } = await supabase.from('agents').delete().eq('id', id);
+      if (error) return json(500, { ok: false, error: error.message });
+      await logAction(email, `collective:delete_agent:${id}`);
+      return json(200, { ok: true });
+    }
+    if (action === 'delete_insight') {
+      const { error } = await supabase.from('insights').delete().eq('id', id);
+      if (error) return json(500, { ok: false, error: error.message });
+      await logAction(email, `collective:delete_insight:${id}`);
+      return json(200, { ok: true });
+    }
     return json(400, { ok: false, error: `Unknown collective action: ${action}` });
   }
 
@@ -113,16 +126,21 @@ export const POST: APIRoute = async (ctx) => {
     else if (action === 'delete_entry') result = await diaries.deleteEntry(email, id);
     else return json(400, { ok: false, error: `Unknown diaries action: ${action}` });
   } else if (surface === 'gallery') {
-    if (action === 'ban_agent') result = await gallery.banAgent(email, id, reason);
-    else if (action === 'verify_agent') result = await gallery.verifyAgent(email, id);
+    if (action === 'ban_agent') result = await gallery.setBanned(email, id, true, reason);
+    else if (action === 'unban_agent') result = await gallery.setBanned(email, id, false);
+    else if (action === 'verify_agent') result = await gallery.setVerified(email, id, true);
+    else if (action === 'unverify_agent') result = await gallery.setVerified(email, id, false);
     else if (action === 'delete_agent') result = await gallery.deleteAgent(email, id);
     else if (action === 'delete_artwork') result = await gallery.deleteArtwork(email, id);
     else return json(400, { ok: false, error: `Unknown gallery action: ${action}` });
   } else if (surface === 'beats') {
     if (action === 'ban_agent')
       result = await beats.setAgent(email, id, { is_banned: true, ban_reason: reason ?? 'admin' });
-    else if (action === 'unban_agent')
-      result = await beats.setAgent(email, id, { is_banned: false });
+    else if (action === 'unban_agent') result = await beats.setAgent(email, id, { is_banned: false });
+    else if (action === 'verify_agent') result = await beats.setVerified(email, id, true);
+    else if (action === 'unverify_agent') result = await beats.setVerified(email, id, false);
+    else if (action === 'delete_agent') result = await beats.deleteAgent(email, id);
+    else if (action === 'delete_beat') result = await beats.deleteBeat(email, id);
     else return json(400, { ok: false, error: `Unknown beats action: ${action}` });
   } else {
     return json(404, { ok: false, error: `Unknown surface: ${surface}` });

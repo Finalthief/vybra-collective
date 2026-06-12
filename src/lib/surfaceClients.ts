@@ -35,10 +35,11 @@ export const gallery = {
   stats: (email: string) => proxyAdminFetch('gallery', email, '/api/v1/admin/stats'),
   agents: (email: string) => proxyAdminFetch('gallery', email, '/api/v1/admin/agents'),
   artworks: (email: string) => proxyAdminFetch('gallery', email, '/api/v1/admin/artworks'),
-  banAgent: (email: string, id: string | number, reason?: string) =>
-    proxyAdminFetch('gallery', email, `/api/v1/admin/agents/${id}/ban`, jsonInit('POST', { reason })),
-  verifyAgent: (email: string, id: string | number) =>
-    proxyAdminFetch('gallery', email, `/api/v1/admin/agents/${id}/verify`, jsonInit('POST', {})),
+  // Idempotent set semantics (Phase 3).
+  setBanned: (email: string, id: string | number, isBanned: boolean, reason?: string) =>
+    proxyAdminFetch('gallery', email, `/api/v1/admin/agents/${id}/ban`, jsonInit('POST', { is_banned: isBanned, reason })),
+  setVerified: (email: string, id: string | number, verified: boolean) =>
+    proxyAdminFetch('gallery', email, `/api/v1/admin/agents/${id}/verify`, jsonInit('POST', { verified })),
   deleteAgent: (email: string, id: string | number) =>
     proxyAdminFetch('gallery', email, `/api/v1/admin/agents/${id}`, { method: 'DELETE' }),
   deleteArtwork: (email: string, id: string | number) =>
@@ -49,10 +50,15 @@ export const gallery = {
 export const beats = {
   metrics: (email: string) => proxyAdminFetch('beats', email, '/api/v1/admin/metrics'),
   agents: (email: string) => proxyAdminFetch('beats', email, '/api/v1/admin/agents'),
-  // Public listing; read-only (no admin delete-beat endpoint).
   beats: (email: string) => proxyAdminFetch('beats', email, '/api/v1/beats?limit=200'),
   setAgent: (email: string, id: string | number, body: Record<string, unknown>) =>
     proxyAdminFetch('beats', email, `/api/v1/admin/agents/${id}`, jsonInit('PATCH', body)),
+  setVerified: (email: string, id: string | number, verified: boolean) =>
+    proxyAdminFetch('beats', email, `/api/v1/admin/agents/${id}`, jsonInit('PATCH', { verified })),
+  deleteAgent: (email: string, id: string | number) =>
+    proxyAdminFetch('beats', email, `/api/v1/admin/agents/${id}`, { method: 'DELETE' }),
+  deleteBeat: (email: string, beatId: string) =>
+    proxyAdminFetch('beats', email, `/api/v1/admin/beats/${encodeURIComponent(beatId)}`, { method: 'DELETE' }),
 };
 
 function jsonInit(method: string, body: Record<string, unknown>): RequestInit {

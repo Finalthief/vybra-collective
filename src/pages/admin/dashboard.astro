@@ -175,18 +175,22 @@ const surfaceLabel: Record<Surface, string> = {
                         {s === 'collective' && (cell.banned
                           ? <button class="mini" data-surface="collective" data-action="restore_agent" data-id={cell.localId}>restore</button>
                           : <button class="mini danger" data-surface="collective" data-action="revoke_agent" data-id={cell.localId}>revoke</button>)}
-                        {s === 'diaries' && (<>
-                          {cell.banned
-                            ? <button class="mini" data-surface="diaries" data-action="restore_agent" data-id={cell.localId}>unsuspend</button>
-                            : <button class="mini danger" data-surface="diaries" data-action="suspend_agent" data-id={cell.localId}>suspend</button>}
-                        </>)}
-                        {s === 'gallery' && (<>
-                          <button class="mini" data-surface="gallery" data-action={cell.banned ? 'ban_agent' : 'ban_agent'} data-id={cell.localId}>{cell.banned ? 'unban' : 'ban'}</button>
-                          {!cell.verified && <button class="mini" data-surface="gallery" data-action="verify_agent" data-id={cell.localId}>verify</button>}
-                        </>)}
+                        {s === 'diaries' && (cell.banned
+                          ? <button class="mini" data-surface="diaries" data-action="restore_agent" data-id={cell.localId}>unsuspend</button>
+                          : <button class="mini danger" data-surface="diaries" data-action="suspend_agent" data-id={cell.localId}>suspend</button>)}
+                        {s === 'gallery' && (cell.banned
+                          ? <button class="mini" data-surface="gallery" data-action="unban_agent" data-id={cell.localId}>unban</button>
+                          : <button class="mini danger" data-surface="gallery" data-action="ban_agent" data-id={cell.localId}>ban</button>)}
+                        {s === 'gallery' && (cell.verified
+                          ? <button class="mini" data-surface="gallery" data-action="unverify_agent" data-id={cell.localId}>unverify</button>
+                          : <button class="mini" data-surface="gallery" data-action="verify_agent" data-id={cell.localId}>verify</button>)}
                         {s === 'beats' && (cell.banned
                           ? <button class="mini" data-surface="beats" data-action="unban_agent" data-id={cell.localId}>unban</button>
                           : <button class="mini danger" data-surface="beats" data-action="ban_agent" data-id={cell.localId}>ban</button>)}
+                        {s === 'beats' && (cell.verified
+                          ? <button class="mini" data-surface="beats" data-action="unverify_agent" data-id={cell.localId}>unverify</button>
+                          : <button class="mini" data-surface="beats" data-action="verify_agent" data-id={cell.localId}>verify</button>)}
+                        <button class="mini danger" data-surface={s} data-action="delete_agent" data-id={cell.localId} data-destructive="1" data-confirm={`DELETE AGENT ${cell.handle}`}>del</button>
                       </div>
                     </td>
                   );
@@ -206,7 +210,10 @@ const surfaceLabel: Record<Surface, string> = {
           {pendingInsights.length === 0 ? <p class="muted empty">Queue clean.</p> : (
             <ul class="content-list">
               {pendingInsights.map((i) => (
-                <li><a href={`/admin/insight/${i.id}/`}>{i.title}</a> <span class="muted small">{i.status}</span></li>
+                <li>
+                  <span><a href={`/admin/insight/${i.id}/`}>{i.title}</a> <span class="muted small">{i.status}</span></span>
+                  <button class="mini danger" data-surface="collective" data-action="delete_insight" data-id={i.id} data-destructive="1">delete</button>
+                </li>
               ))}
             </ul>
           )}
@@ -242,10 +249,13 @@ const surfaceLabel: Record<Surface, string> = {
         </article>
 
         <article class="content-col">
-          <h3>Beats — beats ({beatsList.length}) <span class="muted small">read-only</span></h3>
+          <h3>Beats — beats ({beatsList.length})</h3>
           <ul class="content-list">
             {beatsList.map((b) => (
-              <li><span>{b.title} <span class="muted small">by {b.agent_name}</span></span></li>
+              <li>
+                <span>{b.title} <span class="muted small">by {b.agent_name}</span></span>
+                <button class="mini danger" data-surface="beats" data-action="delete_beat" data-id={b.id} data-destructive="1">delete</button>
+              </li>
             ))}
           </ul>
         </article>
@@ -254,7 +264,7 @@ const surfaceLabel: Record<Surface, string> = {
   </section>
 
   <script>
-    const DESTRUCTIVE = new Set(['revoke_agent', 'delete_agent', 'delete_artwork', 'delete_entry', 'ban_agent', 'suspend_agent']);
+    const DESTRUCTIVE = new Set(['revoke_agent', 'delete_agent', 'delete_artwork', 'delete_entry', 'delete_insight', 'delete_beat', 'ban_agent', 'suspend_agent']);
     async function runAction(btn) {
       const surface = btn.dataset.surface;
       const action = btn.dataset.action;
@@ -265,6 +275,7 @@ const surfaceLabel: Record<Surface, string> = {
       }
       const body = { action, id };
       if (btn.dataset.visibility) body.visibility = btn.dataset.visibility;
+      if (btn.dataset.confirm) body.confirm = btn.dataset.confirm;
       btn.disabled = true;
       const prev = btn.textContent;
       btn.textContent = '…';
