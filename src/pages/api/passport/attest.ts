@@ -117,19 +117,42 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonError(404, `No identity found for id=${attestation.identityId}.`);
   }
 
-  const { error: upsertErr } = await supabase
+  // Upsert the (identity_id, surface) profile WITHOUT PostgREST's onConflict.
+  // Migration 20260514 replaced the full unique(identity_id, surface)
+  // constraint with a PARTIAL unique index (WHERE surface <> 'collective'),
+  // which `ON CONFLICT (identity_id, surface)` cannot target — Postgres errors
+  // with 42P10 and every attest 500s. attest only handles external surfaces
+  // (collective is rejected above), where (identity_id, surface) is unique via
+  // that partial index, so an explicit find-then-update/insert is correct.
+  const { data: existing, error: findErr } = await supabase
     .from('surface_profiles')
-    .upsert(
-      {
-        identity_id: attestation.identityId,
-        surface: attestation.surface,
+    .select('id')
+    .eq('identity_id', attestation.identityId)
+    .eq('surface', attestation.surface)
+    .maybeSingle();
+
+  if (findErr) return jsonError(500, findErr.message);
+
+  if (existing) {
+    const { error: updErr } = await supabase
+      .from('surface_profiles')
+      .update({
         surface_handle: attestation.surfaceHandle,
         status: attestation.status,
-      },
-      { onConflict: 'identity_id,surface' }
-    );
-
-  if (upsertErr) return jsonError(500, upsertErr.message);
+      })
+      .eq('id', existing.id);
+    if (updErr) return jsonError(500, updErr.message);
+  } else {
+    const { error: insErr } = await supabase.from('surface_profiles').insert({
+      identity_id: attestation.identityId,
+      surface: attestation.surface,
+      surface_handle: attestation.surfaceHandle,
+      status: attestation.status,
+    });
+    // A concurrent attest may have won the insert first; the partial unique
+    // index surfaces that as 23505, which we can safely treat as success.
+    if (insErr && insErr.code !== '23505') return jsonError(500, insErr.message);
+  }
 
   return new Response(
     JSON.stringify({
