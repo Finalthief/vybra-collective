@@ -14,7 +14,7 @@
  */
 import { createHmac } from 'node:crypto';
 
-import { canonicalJson, type PassportIdentity } from './passport';
+import { canonicalJson, type PassportIdentity, type Surface } from './passport';
 import { env } from './env';
 
 export const EMBED_PURPOSE = 'vybra-embed-sso';
@@ -46,12 +46,28 @@ export interface EmbedAssertion {
   signatureAlg?: 'hmac-sha256' | null;
 }
 
-/** Parse the configured allow-list of host origins permitted to bind an assertion. */
-export function embedAllowedOrigins(): string[] {
-  return env.embedAllowedOrigins
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** Known Vybra surfaces, for validating the origin→surface map. */
+const KNOWN_SURFACES: Surface[] = ['collective', 'diaries', 'gallery', 'beats'];
+
+/**
+ * Parse VYBRA_EMBED_ALLOWED_ORIGINS into an origin → surface map. Each entry is
+ * `origin=surface` (e.g. "https://www.vybradiary.com=diaries"); the surface identifies which
+ * Vybra surface the host belongs to so the mint endpoint can honor a key's surface_scope — an
+ * admin-narrowed key cannot be upgraded into a Social session for a surface it's excluded from.
+ * Entries lacking a valid `=surface` are dropped (fail-closed: that origin won't be allowed).
+ */
+export function embedAllowedOriginSurfaces(): Map<string, Surface> {
+  const map = new Map<string, Surface>();
+  for (const raw of env.embedAllowedOrigins.split(',')) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    const eq = entry.lastIndexOf('=');
+    if (eq <= 0) continue; // require origin=surface
+    const origin = entry.slice(0, eq).trim();
+    const surface = entry.slice(eq + 1).trim() as Surface;
+    if (origin && KNOWN_SURFACES.includes(surface)) map.set(origin, surface);
+  }
+  return map;
 }
 
 export function buildEmbedAssertion(

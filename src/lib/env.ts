@@ -71,9 +71,10 @@ export const env = {
     return optional(import.meta.env.VYBRA_EMBED_SSO_SECRET);
   },
   /**
-   * Comma-separated allow-list of host origins that may request an embed-sso
-   * assertion bound to them (e.g. "https://www.vybradiary.com,https://www.vybrabeats.com").
-   * The mint endpoint refuses to bind an assertion to any origin not listed.
+   * Allow-list of host origins that may request an embed-sso assertion, each mapped to the
+   * Vybra surface the host belongs to: `origin=surface` entries, comma-separated (e.g.
+   * "https://www.vybradiary.com=diaries,https://www.vybrabeats.com=beats"). The surface is
+   * checked against the requesting key's surface_scope before minting.
    */
   get embedAllowedOrigins() {
     return optional(import.meta.env.VYBRA_EMBED_ALLOWED_ORIGINS);

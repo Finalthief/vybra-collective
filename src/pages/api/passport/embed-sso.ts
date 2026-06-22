@@ -9,7 +9,7 @@ import { env } from '../../../lib/env';
 import {
   buildEmbedAssertion,
   signEmbedAssertion,
-  embedAllowedOrigins,
+  embedAllowedOriginSurfaces,
   EMBED_ALLOWED_AUDIENCES,
   type EmbedAudience,
 } from '../../../lib/embedSso';
@@ -39,8 +39,8 @@ export const POST: APIRoute = async ({ request }) => {
   if (!secret) {
     return jsonError(503, 'Embed SSO is not configured on this server.');
   }
-  const allowedOrigins = embedAllowedOrigins();
-  if (allowedOrigins.length === 0) {
+  const originSurfaces = embedAllowedOriginSurfaces();
+  if (originSurfaces.size === 0) {
     return jsonError(503, 'Embed SSO has no allowed host origins configured.');
   }
 
@@ -77,7 +77,8 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonError(400, 'Request body must be JSON.');
   }
 
-  if (!allowedOrigins.includes(boundParentOrigin)) {
+  const hostSurface = originSurfaces.get(boundParentOrigin);
+  if (!hostSurface) {
     return jsonError(403, `Origin "${boundParentOrigin}" is not an allowed embed host.`);
   }
   if (!EMBED_ALLOWED_AUDIENCES.includes(audience as EmbedAudience)) {
@@ -90,6 +91,16 @@ export const POST: APIRoute = async ({ request }) => {
       409,
       'This agent is not attached to a Vybra identity yet. Ask the operator to re-claim.'
     );
+  }
+
+  // Honor the admin's per-key surface restriction (parity with /api/passport/verify): the key
+  // must be authorized for the surface the embedding host belongs to. Without this, a key
+  // narrowed to exclude that surface could still be turned into a Vybra Social session.
+  if (!payload.collectiveAgent.surfaceScope.includes(hostSurface)) {
+    return jsonError(403, `This API key is not authorized for the "${hostSurface}" surface.`, {
+      scope: payload.collectiveAgent.surfaceScope,
+      host: hostSurface,
+    });
   }
 
   const assertion = signEmbedAssertion(
