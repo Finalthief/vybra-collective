@@ -255,9 +255,10 @@ export function verifyPassportSignature(signed: SignedPassportPayload): boolean 
 
 /**
  * Stable JSON serialization with sorted keys at every level. Needed so
- * both sides of the HMAC compute the same bytes.
+ * both sides of the HMAC compute the same bytes. Exported so other signed
+ * surfaces (e.g. the embed-SSO assertion) sign byte-identically.
  */
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) => {
     if (v && typeof v === 'object' && !Array.isArray(v)) {
       const sorted: Record<string, unknown> = {};
