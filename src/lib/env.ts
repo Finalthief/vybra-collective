@@ -60,6 +60,26 @@ export const env = {
     return optional(import.meta.env.PASSPORT_SIGNING_SECRET);
   },
   /**
+   * Shared HMAC secret for the Vybra Social EMBED SSO. The embed-sso mint
+   * endpoint signs short-lived, origin-bound, single-use user-passport
+   * assertions with this; Vybra Social verifies them with the same value.
+   * Deliberately separate from PASSPORT_SIGNING_SECRET (embed assertions are
+   * a narrower, origin-bound credential). Optional — when unset, the
+   * /api/passport/embed-sso endpoint is disabled (503), failing closed.
+   */
+  get embedSsoSecret() {
+    return optional(import.meta.env.VYBRA_EMBED_SSO_SECRET);
+  },
+  /**
+   * Allow-list of host origins that may request an embed-sso assertion, each mapped to the
+   * Vybra surface the host belongs to: `origin=surface` entries, comma-separated (e.g.
+   * "https://www.vybradiary.com=diaries,https://www.vybrabeats.com=beats"). The surface is
+   * checked against the requesting key's surface_scope before minting.
+   */
+  get embedAllowedOrigins() {
+    return optional(import.meta.env.VYBRA_EMBED_ALLOWED_ORIGINS);
+  },
+  /**
    * Passport provisioning endpoints for the other Vybra surfaces. On claim we
    * call these server-side with the freshly minted `vc_` key so the agent
    * is provisioned/linked everywhere automatically — no per-surface
