@@ -49,6 +49,14 @@ export interface PassportIdentity {
   email: string;
   displayName: string;
   bio: string | null;
+  /**
+   * Absolute, publicly-fetchable URL of the identity's real uploaded
+   * avatar (mirrored into Collective's storage), or null when no real
+   * avatar has been uploaded on any surface. Surfaces adopt a non-null
+   * value on every verify ("last upload anywhere wins everywhere") and
+   * fall back to the generated `avatarDataUrl` gradient when null.
+   */
+  avatarUrl: string | null;
 }
 
 /**
@@ -77,6 +85,15 @@ export interface PassportPayload {
    * missing or the target surface key isn't present.
    */
   handleHints: SurfaceHandleHints;
+  /**
+   * Deterministic gradient SVG avatar (data URI) derived from the
+   * display name. Fallback rendering only — surfaces render it when
+   * `identity.avatarUrl` is null and must never persist it as if it
+   * were a real avatar.
+   */
+  avatarDataUrl: string;
+  /** Deterministic SVG QR code (data URI) pointing at the Collective profile. */
+  qrDataUrl: string;
   /**
    * Echo of the Collective-side agent that authenticated the key. A
    * consumer that wants to link its local user to Collective-specific
@@ -121,7 +138,7 @@ export async function buildPassportPayload(
   const [{ data: identity }, { data: surfaceRows }, { data: keyRow }] = await Promise.all([
     supabase
       .from('identities')
-      .select('id, global_handle, email, display_name, bio')
+      .select('id, global_handle, email, display_name, bio, avatar_url')
       .eq('id', agentRow.identity_id)
       .maybeSingle(),
     supabase
@@ -174,6 +191,7 @@ export async function buildPassportPayload(
       email: identity.email,
       displayName: identity.display_name,
       bio: identity.bio ?? null,
+      avatarUrl: identity.avatar_url ?? null,
     },
     surfaces,
     handleHints,
@@ -311,6 +329,43 @@ export function verifyAttestation(
   secret: string
 ): boolean {
   const expected = signAttestation(body, secret);
+  if (signatureHex.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(signatureHex, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Avatar sync — the push half of real-avatar propagation.
+ *
+ * When a surface stores or deletes a real uploaded avatar locally, it
+ * POSTs this body to Collective's /api/passport/avatar so
+ * `identities.avatar_url` — the canonical cross-surface avatar — always
+ * reflects the most recent upload anywhere. Signed and transported
+ * exactly like attestations: HMAC-SHA256 over the canonical JSON body,
+ * keyed by PASSPORT_SIGNING_SECRET, sent in x-vybra-attestation-sig.
+ */
+
+export interface AvatarSyncBody {
+  identityId: string;
+  surface: Surface;
+  /** Absolute https URL of the new avatar, or null to clear it. */
+  avatarUrl: string | null;
+  issuedAt: string;
+}
+
+export function signAvatarSync(body: AvatarSyncBody, secret: string): string {
+  return createHmac('sha256', secret).update(canonicalJson(body)).digest('hex');
+}
+
+export function verifyAvatarSync(
+  body: AvatarSyncBody,
+  signatureHex: string,
+  secret: string
+): boolean {
+  const expected = signAvatarSync(body, secret);
   if (signatureHex.length !== expected.length) return false;
   try {
     return timingSafeEqual(Buffer.from(signatureHex, 'hex'), Buffer.from(expected, 'hex'));
