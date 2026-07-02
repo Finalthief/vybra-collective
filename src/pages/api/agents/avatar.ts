@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { authenticateAgent } from '../../../lib/auth';
 import { getClientIp, rateLimitCheck } from '../../../lib/rateLimit';
@@ -19,12 +20,16 @@ const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp']);
  *
  * The image is stored at a stable per-agent path (overwritten on
  * re-upload, so there is never more than one avatar object per agent)
- * and `agents.avatar_url` is updated to its public URL.
+ * and `agents.avatar_url` is updated to its public URL. The URL is also
+ * written to the canonical Passport store (`identities.avatar_url`), so
+ * every other Vybra surface adopts it on its next passport verify —
+ * upload once, appears everywhere.
  *
  * Response: { success, url }.
  *
  * DELETE /api/agents/avatar removes the custom avatar; the profile page
- * falls back to the generated passport SVG.
+ * falls back to the generated passport SVG (everywhere, via the same
+ * identities.avatar_url clear).
  */
 export const POST: APIRoute = async ({ request }) => {
   const supabase = getServiceSupabase();
@@ -89,6 +94,8 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonError(500, 'Avatar stored but profile update failed: ' + updateErr.message);
   }
 
+  await syncIdentityAvatarUrl(supabase, agent.id, publicUrl);
+
   return new Response(JSON.stringify({ success: true, url: publicUrl }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
@@ -103,10 +110,11 @@ export const DELETE: APIRoute = async ({ request }) => {
     return jsonError(401, 'Invalid or missing API key. Include `Authorization: Bearer <key>`.');
   }
 
-  // Remove all possible avatar objects for this agent (one per extension).
+  // Remove all possible avatar objects for this agent (one per extension —
+  // .gif only ever arrives via the /api/passport/avatar mirror).
   await supabase.storage
     .from(BUCKET)
-    .remove(['.png', '.webp', '.jpg'].map((ext) => `avatars/${agent.id}/avatar${ext}`));
+    .remove(['.png', '.webp', '.jpg', '.gif'].map((ext) => `avatars/${agent.id}/avatar${ext}`));
 
   const { error: updateErr } = await supabase
     .from('agents')
@@ -116,11 +124,43 @@ export const DELETE: APIRoute = async ({ request }) => {
     return jsonError(500, 'Could not clear avatar: ' + updateErr.message);
   }
 
+  await syncIdentityAvatarUrl(supabase, agent.id, null);
+
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   });
 };
+
+/**
+ * Mirror an agent's avatar change into the canonical Passport store
+ * (`identities.avatar_url`) so every other Vybra surface adopts it on
+ * its next passport verify. Collective IS the Passport authority, so
+ * this is a direct write — no push to /api/passport/avatar needed.
+ * Best-effort: the local agents.avatar_url write already succeeded, so
+ * a failure here is logged rather than failing the request.
+ */
+async function syncIdentityAvatarUrl(
+  supabase: SupabaseClient,
+  agentId: string,
+  avatarUrl: string | null
+): Promise<void> {
+  const { data: agentRow, error: agentErr } = await supabase
+    .from('agents')
+    .select('identity_id')
+    .eq('id', agentId)
+    .maybeSingle();
+  if (agentErr || !agentRow?.identity_id) {
+    if (agentErr) console.error('identity avatar sync: agent lookup failed', agentErr);
+    return;
+  }
+
+  const { error: updErr } = await supabase
+    .from('identities')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', agentRow.identity_id);
+  if (updErr) console.error('identity avatar sync: identities update failed', updErr);
+}
 
 function jsonError(status: number, message: string, details?: unknown) {
   return new Response(JSON.stringify({ success: false, error: message, details }), {
