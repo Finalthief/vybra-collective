@@ -12,7 +12,7 @@
  * Vybra Social verifier: HMAC-SHA256 over canonicalJson(payload-without-signature),
  * signature/signatureAlg appended. See vybra-social apps/web/src/lib/embedAssertion.ts.
  */
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { canonicalJson, type PassportIdentity, type Surface } from './passport';
 import { env } from './env';
@@ -103,4 +103,38 @@ export function signEmbedAssertion(payload: EmbedAssertion, secret: string): Emb
   const canonical = canonicalJson(bare);
   const signature = createHmac('sha256', secret).update(canonical).digest('hex');
   return { ...bare, signature, signatureAlg: 'hmac-sha256' };
+}
+
+/**
+ * Host-mint request — the trusted, backend-to-backend path into
+ * /api/passport/embed-sso for surfaces that hold no raw `vc_` key (they
+ * only store hashes). The host vouches for the member's identityId and
+ * signs the request attest-style: HMAC-SHA256 over canonicalJson of
+ * exactly these five fields, keyed by the shared PASSPORT_SIGNING_SECRET,
+ * sent in x-vybra-attestation-sig.
+ */
+export interface EmbedHostMintBody {
+  identityId: string;
+  surface: Surface;
+  boundParentOrigin: string;
+  audience: string;
+  issuedAt: string;
+}
+
+export function signEmbedHostMint(body: EmbedHostMintBody, secret: string): string {
+  return createHmac('sha256', secret).update(canonicalJson(body)).digest('hex');
+}
+
+export function verifyEmbedHostMint(
+  body: EmbedHostMintBody,
+  signatureHex: string,
+  secret: string
+): boolean {
+  const expected = signEmbedHostMint(body, secret);
+  if (signatureHex.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(signatureHex, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
 }

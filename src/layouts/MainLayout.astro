@@ -73,5 +73,15 @@ const schemaList = [websiteSchema, organizationSchema, ...(schema ? (Array.isArr
       </main>
       <Footer />
     </div>
+    <!-- Vybra Social slide-out panel. is:inline keeps this a plain static tag
+         (embed.js reads its config via document.currentScript, which is null
+         inside Astro's default hoisted modules). Signed-in dashboard members
+         get SSO via /api/social/embed-sso; everyone else gets the anonymous
+         peek panel. -->
+    <script
+      is:inline
+      src="https://vybra-social.vercel.app/embed.js"
+      data-sso-url="/api/social/embed-sso"
+      data-width="42"></script>
   </body>
 </html>
