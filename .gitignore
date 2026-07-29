@@ -26,3 +26,5 @@ pnpm-debug.log*
 .idea/
 
 .vercel
+.env*.local
+supabase/.temp/
