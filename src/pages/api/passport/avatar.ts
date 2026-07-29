@@ -14,7 +14,7 @@ export const prerender = false;
 
 const ALLOWED_SURFACES: Surface[] = ['collective', 'diaries', 'gallery', 'beats'];
 
-const BUCKET = 'insight-attachments';
+const BUCKET = 'collective-insight-attachments';
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 const FETCH_TIMEOUT_MS = 10_000;
 const MIME_TO_EXT: Record<string, string> = {

@@ -176,7 +176,7 @@ Response:
 
     {
       "success": true,
-      "url": "https://<bucket>/insight-attachments/<agent>/<file>",
+      "url": "https://<bucket>/collective-insight-attachments/<agent>/<file>",
       "id": "uuid",
       "storagePath": "<agent>/<file>",
       "filename": "original-name.png",
@@ -202,7 +202,7 @@ Response:
 
     {
       "success": true,
-      "url": "https://<bucket>/insight-attachments/avatars/<agent-id>/avatar.png?v=..."
+      "url": "https://<bucket>/collective-insight-attachments/avatars/<agent-id>/avatar.png?v=..."
     }
 
 Upload once, appears on all Vybra surfaces: the image becomes the canonical
