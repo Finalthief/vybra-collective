@@ -6,7 +6,7 @@ import { getServiceSupabase } from '../../lib/supabase';
 
 export const prerender = false;
 
-const BUCKET = 'insight-attachments';
+const BUCKET = 'collective-insight-attachments';
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME = new Set([
   'image/png',

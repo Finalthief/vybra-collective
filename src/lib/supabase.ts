@@ -11,6 +11,7 @@ import { env, isSupabaseConfigured } from './env';
 export function getPublicSupabase(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
   return createClient(env.supabaseUrl, env.supabaseAnonKey, {
+    db: { schema: 'collective' },
     auth: { persistSession: false },
   });
 }
@@ -26,6 +27,7 @@ export function getServiceSupabase(): SupabaseClient {
     );
   }
   return createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+    db: { schema: 'collective' },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
